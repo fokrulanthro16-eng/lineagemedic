@@ -4,7 +4,7 @@
  */
 
 export interface paths {
-    "/health": {
+    "/": {
         parameters: {
             query?: never;
             header?: never;
@@ -12,10 +12,10 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * Health
-         * @description Liveness probe. Does not touch DataHub.
+         * Root
+         * @description Service banner with the effective, redacted configuration.
          */
-        get: operations["health_health_get"];
+        get: operations["root__get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -24,7 +24,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/status/datahub": {
+    "/audit": {
         parameters: {
             query?: never;
             header?: never;
@@ -32,10 +32,10 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * Datahub Status
-         * @description Report DataHub connectivity truthfully, including when it is absent.
+         * Get Audit
+         * @description Append-only audit log, newest first.
          */
-        get: operations["datahub_status_status_datahub_get"];
+        get: operations["get_audit_audit_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -44,60 +44,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/status/mcp": {
+    "/demo/reset": {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        /**
-         * Mcp Status
-         * @description List MCP tools available, and the calls the last diagnosis made.
-         */
-        get: operations["mcp_status_status_mcp_get"];
+        get?: never;
         put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/status/integrations": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
         /**
-         * Integration Status
-         * @description Consolidated status for the UI status bar.
+         * Demo Reset
+         * @description Clear LineageMedic-owned state only.
+         *
+         *     Does not touch DataHub, and does not rebuild the warehouse. Use
+         *     ``scripts/setup.ps1`` to regenerate the SQLite database.
          */
-        get: operations["integration_status_status_integrations_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/scenarios": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * List Scenarios
-         * @description The runnable scenarios, ordered worst-expected-case first.
-         */
-        get: operations["list_scenarios_scenarios_get"];
-        put?: never;
-        post?: never;
+        post: operations["demo_reset_demo_reset_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -118,6 +81,26 @@ export interface paths {
          * @description Run the seven-agent workflow. Performs no mutation.
          */
         post: operations["diagnose_diagnose_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/health": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Health
+         * @description Liveness probe. Does not touch DataHub.
+         */
+        get: operations["health_health_get"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -161,46 +144,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/incidents/{incident_id}/evidence": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Get Evidence
-         * @description Evidence and the MCP call trace backing one incident.
-         */
-        get: operations["get_evidence_incidents__incident_id__evidence_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/audit": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Get Audit
-         * @description Append-only audit log, newest first.
-         */
-        get: operations["get_audit_audit_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/incidents/{incident_id}/approve": {
         parameters: {
             query?: never;
@@ -215,6 +158,26 @@ export interface paths {
          * @description Record a human decision on the remediation plan.
          */
         post: operations["approve_incidents__incident_id__approve_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/incidents/{incident_id}/evidence": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Evidence
+         * @description Evidence and the MCP call trace backing one incident.
+         */
+        get: operations["get_evidence_incidents__incident_id__evidence_get"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -241,30 +204,27 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/demo/reset": {
+    "/scenarios": {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        get?: never;
-        put?: never;
         /**
-         * Demo Reset
-         * @description Clear LineageMedic-owned state only.
-         *
-         *     Does not touch DataHub, and does not rebuild the warehouse. Use
-         *     ``scripts/setup.ps1`` to regenerate the SQLite database.
+         * List Scenarios
+         * @description The runnable scenarios, ordered worst-expected-case first.
          */
-        post: operations["demo_reset_demo_reset_post"];
+        get: operations["list_scenarios_scenarios_get"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
         patch?: never;
         trace?: never;
     };
-    "/": {
+    "/status/datahub": {
         parameters: {
             query?: never;
             header?: never;
@@ -272,10 +232,50 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * Root
-         * @description Service banner with the effective, redacted configuration.
+         * Datahub Status
+         * @description Report DataHub connectivity truthfully, including when it is absent.
          */
-        get: operations["root__get"];
+        get: operations["datahub_status_status_datahub_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/status/integrations": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Integration Status
+         * @description Consolidated status for the UI status bar.
+         */
+        get: operations["integration_status_status_integrations_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/status/mcp": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Mcp Status
+         * @description List MCP tools available, and the calls the last diagnosis made.
+         */
+        get: operations["mcp_status_status_mcp_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -306,26 +306,26 @@ export interface components {
          */
         AgentStep: {
             agent: components["schemas"]["AgentName"];
-            /** Title */
-            title: string;
-            /** Summary */
-            summary: string;
-            /**
-             * Started At
-             * Format: date-time
-             */
-            started_at: string;
             /** Duration Ms */
             duration_ms: number;
+            /** Evidence */
+            evidence?: components["schemas"]["EvidenceItem"][];
+            /** Mcp Calls */
+            mcp_calls?: components["schemas"]["McpCallRecord"][];
             /**
              * Ok
              * @default true
              */
             ok: boolean;
-            /** Evidence */
-            evidence?: components["schemas"]["EvidenceItem"][];
-            /** Mcp Calls */
-            mcp_calls?: components["schemas"]["McpCallRecord"][];
+            /**
+             * Started At
+             * Format: date-time
+             */
+            started_at: string;
+            /** Summary */
+            summary: string;
+            /** Title */
+            title: string;
         };
         /** ApprovalRequest */
         ApprovalRequest: {
@@ -348,9 +348,9 @@ export interface components {
         };
         /** ApprovalResponse */
         ApprovalResponse: {
+            approval_state: components["schemas"]["ApprovalState"];
             /** Incident Id */
             incident_id: string;
-            approval_state: components["schemas"]["ApprovalState"];
             /** Message */
             message: string;
         };
@@ -365,28 +365,28 @@ export interface components {
          * @description A node in the lineage graph: dataset, feature table, model, or endpoint.
          */
         Asset: {
-            /** Urn */
-            urn: string;
-            /** Name */
-            name: string;
-            kind: components["schemas"]["AssetKind"];
-            /** Platform */
-            platform: string;
-            /** Description */
-            description?: string | null;
-            /** Tags */
-            tags?: string[];
-            /** Owners */
-            owners?: components["schemas"]["Owner"][];
-            /** Schema Fields */
-            schema_fields?: components["schemas"]["SchemaField"][];
-            /** Upstreams */
-            upstreams?: string[];
-            /** Downstreams */
-            downstreams?: string[];
-            source: components["schemas"]["DataSource"];
             /** Datahub Url */
             datahub_url?: string | null;
+            /** Description */
+            description?: string | null;
+            /** Downstreams */
+            downstreams?: string[];
+            kind: components["schemas"]["AssetKind"];
+            /** Name */
+            name: string;
+            /** Owners */
+            owners?: components["schemas"]["Owner"][];
+            /** Platform */
+            platform: string;
+            /** Schema Fields */
+            schema_fields?: components["schemas"]["SchemaField"][];
+            source: components["schemas"]["DataSource"];
+            /** Tags */
+            tags?: string[];
+            /** Upstreams */
+            upstreams?: string[];
+            /** Urn */
+            urn: string;
         };
         /**
          * AssetKind
@@ -399,6 +399,11 @@ export interface components {
          * @description An append-only record of something the application did.
          */
         AuditEvent: {
+            /**
+             * Actor
+             * @default system
+             */
+            actor: string;
             /** Event Id */
             event_id: string;
             /** Incident Id */
@@ -410,20 +415,15 @@ export interface components {
             kind: "diagnosis_started" | "diagnosis_completed" | "approval_requested" | "approval_granted" | "approval_rejected" | "writeback_attempted" | "writeback_applied" | "writeback_blocked" | "demo_reset";
             /** Message */
             message: string;
-            /**
-             * Actor
-             * @default system
-             */
-            actor: string;
+            /** Metadata */
+            metadata?: {
+                [key: string]: unknown;
+            };
             /**
              * Occurred At
              * Format: date-time
              */
             occurred_at?: string;
-            /** Metadata */
-            metadata?: {
-                [key: string]: unknown;
-            };
         };
         /**
          * CheckStatus
@@ -437,14 +437,14 @@ export interface components {
             connected: boolean;
             /** Detail */
             detail: string;
-            /** Gms Url */
-            gms_url: string;
-            /** Frontend Url */
-            frontend_url: string;
-            /** Token Configured */
-            token_configured: boolean;
             /** Fixture Mode Notice */
             fixture_mode_notice: string | null;
+            /** Frontend Url */
+            frontend_url: string;
+            /** Gms Url */
+            gms_url: string;
+            /** Token Configured */
+            token_configured: boolean;
         };
         /**
          * DataSource
@@ -473,39 +473,27 @@ export interface components {
          *     and the provenance of every DataHub fact it relied on.
          */
         Diagnosis: {
-            /** Incident Id */
-            incident_id: string;
-            /** Scenario Id */
-            scenario_id: string;
-            /** Title */
-            title: string;
-            severity: components["schemas"]["Severity"];
+            approval_state: components["schemas"]["ApprovalState"];
             /** Confidence */
             confidence: number;
             /** Confidence Explanation */
             confidence_explanation: string;
-            /** Summary */
-            summary: string;
-            /** Quality Checks */
-            quality_checks?: components["schemas"]["QualityCheck"][];
-            lineage: components["schemas"]["LineageGraph"];
-            impact: components["schemas"]["ImpactAssessment"];
-            /** Root Causes */
-            root_causes?: components["schemas"]["RootCauseHypothesis"][];
-            /** Remediation */
-            remediation?: components["schemas"]["RemediationAction"][];
-            safety: components["schemas"]["SafetyVerdict"];
-            approval_state: components["schemas"]["ApprovalState"];
-            writeback?: components["schemas"]["WritebackReceipt"] | null;
+            context_source: components["schemas"]["DataSource"];
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at?: string;
             /** Evidence */
             evidence?: components["schemas"]["EvidenceItem"][];
-            /** Steps */
-            steps?: components["schemas"]["AgentStep"][];
-            /** Mcp Calls */
-            mcp_calls?: components["schemas"]["McpCallRecord"][];
-            context_source: components["schemas"]["DataSource"];
             /** Fixture Mode Notice */
             fixture_mode_notice?: string | null;
+            impact: components["schemas"]["ImpactAssessment"];
+            /** Incident Id */
+            incident_id: string;
+            lineage: components["schemas"]["LineageGraph"];
+            /** Mcp Calls */
+            mcp_calls?: components["schemas"]["McpCallRecord"][];
             /** Narration */
             narration?: string | null;
             /**
@@ -513,11 +501,23 @@ export interface components {
              * @default deterministic
              */
             narration_provider: string;
-            /**
-             * Created At
-             * Format: date-time
-             */
-            created_at?: string;
+            /** Quality Checks */
+            quality_checks?: components["schemas"]["QualityCheck"][];
+            /** Remediation */
+            remediation?: components["schemas"]["RemediationAction"][];
+            /** Root Causes */
+            root_causes?: components["schemas"]["RootCauseHypothesis"][];
+            safety: components["schemas"]["SafetyVerdict"];
+            /** Scenario Id */
+            scenario_id: string;
+            severity: components["schemas"]["Severity"];
+            /** Steps */
+            steps?: components["schemas"]["AgentStep"][];
+            /** Summary */
+            summary: string;
+            /** Title */
+            title: string;
+            writeback?: components["schemas"]["WritebackReceipt"] | null;
         };
         /**
          * EvidenceItem
@@ -527,19 +527,19 @@ export interface components {
          *     names its origin agent and points at the artifact it was derived from.
          */
         EvidenceItem: {
-            /** Label */
-            label: string;
+            agent: components["schemas"]["AgentName"];
             /** Detail */
             detail: string;
-            agent: components["schemas"]["AgentName"];
-            source: components["schemas"]["DataSource"];
-            /** References */
-            references?: string[];
+            /** Label */
+            label: string;
             /**
              * Observed At
              * Format: date-time
              */
             observed_at?: string;
+            /** References */
+            references?: string[];
+            source: components["schemas"]["DataSource"];
         };
         /** HTTPValidationError */
         HTTPValidationError: {
@@ -548,6 +548,10 @@ export interface components {
         };
         /** HealthResponse */
         HealthResponse: {
+            /** Database Present */
+            database_present: boolean;
+            /** Mode */
+            mode: string;
             /**
              * Status
              * @constant
@@ -555,28 +559,24 @@ export interface components {
             status: "ok";
             /** Version */
             version: string;
-            /** Mode */
-            mode: string;
-            /** Database Present */
-            database_present: boolean;
         };
         /**
          * ImpactAssessment
          * @description The full affected/unaffected partition for an incident.
          */
         ImpactAssessment: {
-            /** Source Urn */
-            source_urn: string;
-            /** Assets */
-            assets: components["schemas"]["ImpactedAsset"][];
             /** Affected Count */
             affected_count: number;
-            /** Unaffected Count */
-            unaffected_count: number;
-            /** Production Endpoints Affected */
-            production_endpoints_affected?: string[];
+            /** Assets */
+            assets: components["schemas"]["ImpactedAsset"][];
             /** Ml Models Affected */
             ml_models_affected?: string[];
+            /** Production Endpoints Affected */
+            production_endpoints_affected?: string[];
+            /** Source Urn */
+            source_urn: string;
+            /** Unaffected Count */
+            unaffected_count: number;
         };
         /**
          * ImpactState
@@ -589,43 +589,43 @@ export interface components {
          * @description An asset classified against the blast radius, with the reason why.
          */
         ImpactedAsset: {
-            /** Urn */
-            urn: string;
-            /** Name */
-            name: string;
-            kind: components["schemas"]["AssetKind"];
-            state: components["schemas"]["ImpactState"];
             /** Hops From Source */
             hops_from_source?: number | null;
+            kind: components["schemas"]["AssetKind"];
+            /** Name */
+            name: string;
             /** Rationale */
             rationale: string;
+            state: components["schemas"]["ImpactState"];
+            /** Urn */
+            urn: string;
         };
         /**
          * IntegrationStatus
          * @description Live status of each external dependency, for the UI status bar.
          */
         IntegrationStatus: {
+            /** Datahub Connected */
+            datahub_connected: boolean;
+            /** Datahub Detail */
+            datahub_detail: string;
+            /** Fixture Mode Notice */
+            fixture_mode_notice?: string | null;
+            /** Llm Available */
+            llm_available: boolean;
+            /** Llm Detail */
+            llm_detail: string;
+            /** Llm Provider */
+            llm_provider: string;
+            /** Mcp Connected */
+            mcp_connected: boolean;
+            /** Mcp Detail */
+            mcp_detail: string;
             /**
              * Mode
              * @enum {string}
              */
             mode: "fixture" | "live";
-            /** Datahub Connected */
-            datahub_connected: boolean;
-            /** Datahub Detail */
-            datahub_detail: string;
-            /** Mcp Connected */
-            mcp_connected: boolean;
-            /** Mcp Detail */
-            mcp_detail: string;
-            /** Llm Provider */
-            llm_provider: string;
-            /** Llm Available */
-            llm_available: boolean;
-            /** Llm Detail */
-            llm_detail: string;
-            /** Fixture Mode Notice */
-            fixture_mode_notice?: string | null;
         };
         /**
          * LineageGraph
@@ -634,12 +634,12 @@ export interface components {
         LineageGraph: {
             /** Assets */
             assets: components["schemas"]["Asset"][];
-            source: components["schemas"]["DataSource"];
             /**
              * Retrieved At
              * Format: date-time
              */
             retrieved_at?: string;
+            source: components["schemas"]["DataSource"];
         };
         /**
          * McpCallRecord
@@ -649,26 +649,26 @@ export interface components {
          *     tools ran, with what (sanitized) arguments, and what URNs came back.
          */
         McpCallRecord: {
-            /** Tool */
-            tool: string;
             /** Arguments */
             arguments: {
                 [key: string]: unknown;
             };
-            /** Ok */
-            ok: boolean;
-            /** Returned Urns */
-            returned_urns?: string[];
-            /** Error */
-            error?: string | null;
-            /** Duration Ms */
-            duration_ms: number;
-            source: components["schemas"]["DataSource"];
             /**
              * Called At
              * Format: date-time
              */
             called_at?: string;
+            /** Duration Ms */
+            duration_ms: number;
+            /** Error */
+            error?: string | null;
+            /** Ok */
+            ok: boolean;
+            /** Returned Urns */
+            returned_urns?: string[];
+            source: components["schemas"]["DataSource"];
+            /** Tool */
+            tool: string;
         };
         /** McpCapabilityResponse */
         McpCapabilityResponse: {
@@ -676,12 +676,12 @@ export interface components {
             connected: boolean;
             /** Detail */
             detail: string;
+            /** Recent Calls */
+            recent_calls: components["schemas"]["McpCallRecord"][];
             /** Source */
             source: string;
             /** Tools */
             tools: string[];
-            /** Recent Calls */
-            recent_calls: components["schemas"]["McpCallRecord"][];
         };
         /**
          * Owner
@@ -692,8 +692,8 @@ export interface components {
          *     repository.
          */
         Owner: {
-            /** Urn */
-            urn: string;
+            /** Contact */
+            contact?: string | null;
             /** Display Name */
             display_name: string;
             /**
@@ -701,8 +701,8 @@ export interface components {
              * @enum {string}
              */
             type: "TECHNICAL_OWNER" | "BUSINESS_OWNER" | "DATA_STEWARD";
-            /** Contact */
-            contact?: string | null;
+            /** Urn */
+            urn: string;
         };
         /**
          * QualityCheck
@@ -714,31 +714,31 @@ export interface components {
         QualityCheck: {
             /** Check Id */
             check_id: string;
-            /** Description */
-            description: string;
-            /** Dataset Urn */
-            dataset_urn: string;
             /** Column */
             column?: string | null;
-            status: components["schemas"]["CheckStatus"];
-            /** Observed Value */
-            observed_value: number;
-            /** Threshold */
-            threshold: number;
             /**
              * Comparison
              * @enum {string}
              */
             comparison: "lte" | "gte" | "eq";
-            /** Rows Scanned */
-            rows_scanned: number;
+            /** Dataset Urn */
+            dataset_urn: string;
+            /** Description */
+            description: string;
             /**
              * Failing Rows
              * @default 0
              */
             failing_rows: number;
+            /** Observed Value */
+            observed_value: number;
+            /** Rows Scanned */
+            rows_scanned: number;
             /** Sample Failing Values */
             sample_failing_values?: string[];
+            status: components["schemas"]["CheckStatus"];
+            /** Threshold */
+            threshold: number;
         };
         /**
          * RemediationAction
@@ -750,19 +750,19 @@ export interface components {
         RemediationAction: {
             /** Action Id */
             action_id: string;
-            /** Title */
-            title: string;
             /** Description */
             description: string;
-            risk: components["schemas"]["ActionRisk"];
-            /** Target Urn */
-            target_urn: string;
-            /** Reversible */
-            reversible: boolean;
-            /** Rollback */
-            rollback?: string | null;
             /** Requires Approval */
             requires_approval: boolean;
+            /** Reversible */
+            reversible: boolean;
+            risk: components["schemas"]["ActionRisk"];
+            /** Rollback */
+            rollback?: string | null;
+            /** Target Urn */
+            target_urn: string;
+            /** Title */
+            title: string;
         };
         /** ResetResponse */
         ResetResponse: {
@@ -776,16 +776,16 @@ export interface components {
          * @description One ranked candidate explanation for the observed failure.
          */
         RootCauseHypothesis: {
-            /** Summary */
-            summary: string;
-            /** Suspected Urn */
-            suspected_urn: string;
             /** Confidence */
             confidence: number;
             /** Reasoning */
             reasoning: string;
+            /** Summary */
+            summary: string;
             /** Supporting Evidence */
             supporting_evidence?: string[];
+            /** Suspected Urn */
+            suspected_urn: string;
         };
         /**
          * SafetyVerdict
@@ -796,33 +796,35 @@ export interface components {
             approved_actions: string[];
             /** Blocked Actions */
             blocked_actions: string[];
-            /** Requires Human Approval */
-            requires_human_approval: boolean;
             /** Blocking Reasons */
             blocking_reasons?: {
                 [key: string]: string;
             };
             /** Notes */
             notes?: string[];
+            /** Requires Human Approval */
+            requires_human_approval: boolean;
         };
         /**
          * ScenarioSummary
          * @description Catalog entry for a runnable scenario.
          */
         ScenarioSummary: {
+            /** Description */
+            description: string;
+            expected_severity: components["schemas"]["Severity"];
             /** Scenario Id */
             scenario_id: string;
             /** Title */
             title: string;
-            /** Description */
-            description: string;
-            expected_severity: components["schemas"]["Severity"];
         };
         /**
          * SchemaField
          * @description One column of a dataset schema, as reported by DataHub.
          */
         SchemaField: {
+            /** Description */
+            description?: string | null;
             /** Name */
             name: string;
             /** Native Type */
@@ -832,8 +834,6 @@ export interface components {
              * @default true
              */
             nullable: boolean;
-            /** Description */
-            description?: string | null;
         };
         /**
          * Severity
@@ -843,16 +843,16 @@ export interface components {
         Severity: "critical" | "warning" | "healthy";
         /** ValidationError */
         ValidationError: {
+            /** Context */
+            ctx?: Record<string, never>;
+            /** Input */
+            input?: unknown;
             /** Location */
             loc: (string | number)[];
             /** Message */
             msg: string;
             /** Error Type */
             type: string;
-            /** Input */
-            input?: unknown;
-            /** Context */
-            ctx?: Record<string, never>;
         };
         /**
          * WritebackReceipt
@@ -863,25 +863,25 @@ export interface components {
          *     adapter reported a real, verified mutation.
          */
         WritebackReceipt: {
-            status: components["schemas"]["WritebackStatus"];
-            /** Target Urns */
-            target_urns?: string[];
             /** Aspects Written */
             aspects_written?: string[];
-            /** Tags Added */
-            tags_added?: string[];
-            /** Note */
-            note: string;
-            /** Datahub Urls */
-            datahub_urls?: string[];
-            source: components["schemas"]["DataSource"];
             /**
              * Attempted At
              * Format: date-time
              */
             attempted_at?: string;
+            /** Datahub Urls */
+            datahub_urls?: string[];
             /** Error */
             error?: string | null;
+            /** Note */
+            note: string;
+            source: components["schemas"]["DataSource"];
+            status: components["schemas"]["WritebackStatus"];
+            /** Tags Added */
+            tags_added?: string[];
+            /** Target Urns */
+            target_urns?: string[];
         };
         /**
          * WritebackStatus
@@ -898,7 +898,7 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
-    health_health_get: {
+    root__get: {
         parameters: {
             query?: never;
             header?: never;
@@ -913,14 +913,18 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["HealthResponse"];
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
                 };
             };
         };
     };
-    datahub_status_status_datahub_get: {
+    get_audit_audit_get: {
         parameters: {
-            query?: never;
+            query?: {
+                incident_id?: string | null;
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -933,12 +937,21 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["DataHubStatusResponse"];
+                    "application/json": components["schemas"]["AuditEvent"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
     };
-    mcp_status_status_mcp_get: {
+    demo_reset_demo_reset_post: {
         parameters: {
             query?: never;
             header?: never;
@@ -953,47 +966,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["McpCapabilityResponse"];
-                };
-            };
-        };
-    };
-    integration_status_status_integrations_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["IntegrationStatus"];
-                };
-            };
-        };
-    };
-    list_scenarios_scenarios_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ScenarioSummary"][];
+                    "application/json": components["schemas"]["ResetResponse"];
                 };
             };
         };
@@ -1027,6 +1000,26 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    health_health_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HealthResponse"];
                 };
             };
         };
@@ -1082,70 +1075,6 @@ export interface operations {
             };
         };
     };
-    get_evidence_incidents__incident_id__evidence_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                incident_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    };
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    get_audit_audit_get: {
-        parameters: {
-            query?: {
-                incident_id?: string | null;
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["AuditEvent"][];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
     approve_incidents__incident_id__approve_post: {
         parameters: {
             query?: never;
@@ -1168,6 +1097,39 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ApprovalResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_evidence_incidents__incident_id__evidence_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                incident_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
                 };
             };
             /** @description Validation Error */
@@ -1212,7 +1174,7 @@ export interface operations {
             };
         };
     };
-    demo_reset_demo_reset_post: {
+    list_scenarios_scenarios_get: {
         parameters: {
             query?: never;
             header?: never;
@@ -1227,12 +1189,12 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["ResetResponse"];
+                    "application/json": components["schemas"]["ScenarioSummary"][];
                 };
             };
         };
     };
-    root__get: {
+    datahub_status_status_datahub_get: {
         parameters: {
             query?: never;
             header?: never;
@@ -1247,9 +1209,47 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    };
+                    "application/json": components["schemas"]["DataHubStatusResponse"];
+                };
+            };
+        };
+    };
+    integration_status_status_integrations_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["IntegrationStatus"];
+                };
+            };
+        };
+    };
+    mcp_status_status_mcp_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["McpCapabilityResponse"];
                 };
             };
         };
