@@ -1,0 +1,1848 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "LineageMedic API",
+    "description": "Diagnose, contain, and heal silent data failures before they break production ML. Uses DataHub for schema, ownership, and lineage context.",
+    "version": "0.1.0"
+  },
+  "paths": {
+    "/health": {
+      "get": {
+        "tags": [
+          "status"
+        ],
+        "summary": "Health",
+        "description": "Liveness probe. Does not touch DataHub.",
+        "operationId": "health_health_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HealthResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/status/datahub": {
+      "get": {
+        "tags": [
+          "status"
+        ],
+        "summary": "Datahub Status",
+        "description": "Report DataHub connectivity truthfully, including when it is absent.",
+        "operationId": "datahub_status_status_datahub_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DataHubStatusResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/status/mcp": {
+      "get": {
+        "tags": [
+          "status"
+        ],
+        "summary": "Mcp Status",
+        "description": "List MCP tools available, and the calls the last diagnosis made.",
+        "operationId": "mcp_status_status_mcp_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/McpCapabilityResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/status/integrations": {
+      "get": {
+        "tags": [
+          "status"
+        ],
+        "summary": "Integration Status",
+        "description": "Consolidated status for the UI status bar.",
+        "operationId": "integration_status_status_integrations_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IntegrationStatus"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/scenarios": {
+      "get": {
+        "tags": [
+          "incidents"
+        ],
+        "summary": "List Scenarios",
+        "description": "The runnable scenarios, ordered worst-expected-case first.",
+        "operationId": "list_scenarios_scenarios_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/ScenarioSummary"
+                  },
+                  "type": "array",
+                  "title": "Response List Scenarios Scenarios Get"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/diagnose": {
+      "post": {
+        "tags": [
+          "incidents"
+        ],
+        "summary": "Diagnose",
+        "description": "Run the seven-agent workflow. Performs no mutation.",
+        "operationId": "diagnose_diagnose_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DiagnoseRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Diagnosis"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/incidents": {
+      "get": {
+        "tags": [
+          "incidents"
+        ],
+        "summary": "List Incidents",
+        "description": "All diagnoses computed since the last reset, newest first.",
+        "operationId": "list_incidents_incidents_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/Diagnosis"
+                  },
+                  "type": "array",
+                  "title": "Response List Incidents Incidents Get"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/incidents/{incident_id}": {
+      "get": {
+        "tags": [
+          "incidents"
+        ],
+        "summary": "Get Incident",
+        "operationId": "get_incident_incidents__incident_id__get",
+        "parameters": [
+          {
+            "name": "incident_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Incident Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Diagnosis"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/incidents/{incident_id}/evidence": {
+      "get": {
+        "tags": [
+          "incidents"
+        ],
+        "summary": "Get Evidence",
+        "description": "Evidence and the MCP call trace backing one incident.",
+        "operationId": "get_evidence_incidents__incident_id__evidence_get",
+        "parameters": [
+          {
+            "name": "incident_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Incident Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "title": "Response Get Evidence Incidents  Incident Id  Evidence Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/audit": {
+      "get": {
+        "tags": [
+          "incidents"
+        ],
+        "summary": "Get Audit",
+        "description": "Append-only audit log, newest first.",
+        "operationId": "get_audit_audit_get",
+        "parameters": [
+          {
+            "name": "incident_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Incident Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/AuditEvent"
+                  },
+                  "title": "Response Get Audit Audit Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/incidents/{incident_id}/approve": {
+      "post": {
+        "tags": [
+          "approval"
+        ],
+        "summary": "Approve",
+        "description": "Record a human decision on the remediation plan.",
+        "operationId": "approve_incidents__incident_id__approve_post",
+        "parameters": [
+          {
+            "name": "incident_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Incident Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ApprovalRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApprovalResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/incidents/{incident_id}/writeback": {
+      "post": {
+        "tags": [
+          "approval"
+        ],
+        "summary": "Writeback",
+        "description": "Write incident knowledge to DataHub. Requires prior approval.",
+        "operationId": "writeback_incidents__incident_id__writeback_post",
+        "parameters": [
+          {
+            "name": "incident_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Incident Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WritebackReceipt"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/demo/reset": {
+      "post": {
+        "tags": [
+          "demo"
+        ],
+        "summary": "Demo Reset",
+        "description": "Clear LineageMedic-owned state only.\n\nDoes not touch DataHub, and does not rebuild the warehouse. Use\n``scripts/setup.ps1`` to regenerate the SQLite database.",
+        "operationId": "demo_reset_demo_reset_post",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResetResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/": {
+      "get": {
+        "tags": [
+          "status"
+        ],
+        "summary": "Root",
+        "description": "Service banner with the effective, redacted configuration.",
+        "operationId": "root__get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "type": "object",
+                  "title": "Response Root  Get"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "ActionRisk": {
+        "type": "string",
+        "enum": [
+          "safe",
+          "reversible",
+          "destructive"
+        ],
+        "title": "ActionRisk",
+        "description": "How dangerous a proposed remediation action is."
+      },
+      "AgentName": {
+        "type": "string",
+        "enum": [
+          "quality",
+          "context",
+          "impact",
+          "root_cause",
+          "remediation",
+          "safety",
+          "writeback"
+        ],
+        "title": "AgentName",
+        "description": "The seven workflow agents, in execution order."
+      },
+      "AgentStep": {
+        "properties": {
+          "agent": {
+            "$ref": "#/components/schemas/AgentName"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "summary": {
+            "type": "string",
+            "title": "Summary"
+          },
+          "started_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Started At"
+          },
+          "duration_ms": {
+            "type": "number",
+            "title": "Duration Ms"
+          },
+          "ok": {
+            "type": "boolean",
+            "title": "Ok",
+            "default": true
+          },
+          "evidence": {
+            "items": {
+              "$ref": "#/components/schemas/EvidenceItem"
+            },
+            "type": "array",
+            "title": "Evidence"
+          },
+          "mcp_calls": {
+            "items": {
+              "$ref": "#/components/schemas/McpCallRecord"
+            },
+            "type": "array",
+            "title": "Mcp Calls"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "agent",
+          "title",
+          "summary",
+          "started_at",
+          "duration_ms"
+        ],
+        "title": "AgentStep",
+        "description": "One agent's execution record, for the UI timeline."
+      },
+      "ApprovalRequest": {
+        "properties": {
+          "approved": {
+            "type": "boolean",
+            "title": "Approved",
+            "description": "True to approve the plan, False to reject it."
+          },
+          "approver": {
+            "type": "string",
+            "maxLength": 120,
+            "title": "Approver",
+            "description": "Who made the decision. Recorded in the audit log.",
+            "default": "operator"
+          },
+          "note": {
+            "type": "string",
+            "maxLength": 2000,
+            "title": "Note",
+            "default": ""
+          }
+        },
+        "type": "object",
+        "required": [
+          "approved"
+        ],
+        "title": "ApprovalRequest"
+      },
+      "ApprovalResponse": {
+        "properties": {
+          "incident_id": {
+            "type": "string",
+            "title": "Incident Id"
+          },
+          "approval_state": {
+            "$ref": "#/components/schemas/ApprovalState"
+          },
+          "message": {
+            "type": "string",
+            "title": "Message"
+          }
+        },
+        "type": "object",
+        "required": [
+          "incident_id",
+          "approval_state",
+          "message"
+        ],
+        "title": "ApprovalResponse"
+      },
+      "ApprovalState": {
+        "type": "string",
+        "enum": [
+          "pending",
+          "approved",
+          "rejected",
+          "not_required"
+        ],
+        "title": "ApprovalState",
+        "description": "Human approval gate state for a remediation plan."
+      },
+      "Asset": {
+        "properties": {
+          "urn": {
+            "type": "string",
+            "title": "Urn"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "kind": {
+            "$ref": "#/components/schemas/AssetKind"
+          },
+          "platform": {
+            "type": "string",
+            "title": "Platform"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "tags": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Tags"
+          },
+          "owners": {
+            "items": {
+              "$ref": "#/components/schemas/Owner"
+            },
+            "type": "array",
+            "title": "Owners"
+          },
+          "schema_fields": {
+            "items": {
+              "$ref": "#/components/schemas/SchemaField"
+            },
+            "type": "array",
+            "title": "Schema Fields"
+          },
+          "upstreams": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Upstreams"
+          },
+          "downstreams": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Downstreams"
+          },
+          "source": {
+            "$ref": "#/components/schemas/DataSource"
+          },
+          "datahub_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Datahub Url"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "urn",
+          "name",
+          "kind",
+          "platform",
+          "source"
+        ],
+        "title": "Asset",
+        "description": "A node in the lineage graph: dataset, feature table, model, or endpoint."
+      },
+      "AssetKind": {
+        "type": "string",
+        "enum": [
+          "dataset",
+          "feature_table",
+          "ml_model",
+          "endpoint"
+        ],
+        "title": "AssetKind",
+        "description": "The kind of node in the lineage graph."
+      },
+      "AuditEvent": {
+        "properties": {
+          "event_id": {
+            "type": "string",
+            "title": "Event Id"
+          },
+          "incident_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Incident Id"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "diagnosis_started",
+              "diagnosis_completed",
+              "approval_requested",
+              "approval_granted",
+              "approval_rejected",
+              "writeback_attempted",
+              "writeback_applied",
+              "writeback_blocked",
+              "demo_reset"
+            ],
+            "title": "Kind"
+          },
+          "message": {
+            "type": "string",
+            "title": "Message"
+          },
+          "actor": {
+            "type": "string",
+            "title": "Actor",
+            "default": "system"
+          },
+          "occurred_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Occurred At"
+          },
+          "metadata": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Metadata"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "event_id",
+          "incident_id",
+          "kind",
+          "message"
+        ],
+        "title": "AuditEvent",
+        "description": "An append-only record of something the application did."
+      },
+      "CheckStatus": {
+        "type": "string",
+        "enum": [
+          "pass",
+          "fail"
+        ],
+        "title": "CheckStatus",
+        "description": "Outcome of a single data-quality check."
+      },
+      "DataHubStatusResponse": {
+        "properties": {
+          "connected": {
+            "type": "boolean",
+            "title": "Connected"
+          },
+          "detail": {
+            "type": "string",
+            "title": "Detail"
+          },
+          "gms_url": {
+            "type": "string",
+            "title": "Gms Url"
+          },
+          "frontend_url": {
+            "type": "string",
+            "title": "Frontend Url"
+          },
+          "token_configured": {
+            "type": "boolean",
+            "title": "Token Configured"
+          },
+          "fixture_mode_notice": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fixture Mode Notice"
+          }
+        },
+        "type": "object",
+        "required": [
+          "connected",
+          "detail",
+          "gms_url",
+          "frontend_url",
+          "token_configured",
+          "fixture_mode_notice"
+        ],
+        "title": "DataHubStatusResponse"
+      },
+      "DataSource": {
+        "type": "string",
+        "enum": [
+          "live_datahub",
+          "fixture"
+        ],
+        "title": "DataSource",
+        "description": "Where a piece of context actually came from.\n\nThis is the anti-fabrication primitive. ``FIXTURE`` is surfaced in the API\nand rendered as a banner in the UI so a demo can never be mistaken for a\nlive DataHub reading."
+      },
+      "DiagnoseRequest": {
+        "properties": {
+          "scenario_id": {
+            "type": "string",
+            "title": "Scenario Id",
+            "description": "Scenario to run. See GET /scenarios."
+          }
+        },
+        "type": "object",
+        "required": [
+          "scenario_id"
+        ],
+        "title": "DiagnoseRequest"
+      },
+      "Diagnosis": {
+        "properties": {
+          "incident_id": {
+            "type": "string",
+            "title": "Incident Id"
+          },
+          "scenario_id": {
+            "type": "string",
+            "title": "Scenario Id"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "severity": {
+            "$ref": "#/components/schemas/Severity"
+          },
+          "confidence": {
+            "type": "number",
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "title": "Confidence"
+          },
+          "confidence_explanation": {
+            "type": "string",
+            "title": "Confidence Explanation"
+          },
+          "summary": {
+            "type": "string",
+            "title": "Summary"
+          },
+          "quality_checks": {
+            "items": {
+              "$ref": "#/components/schemas/QualityCheck"
+            },
+            "type": "array",
+            "title": "Quality Checks"
+          },
+          "lineage": {
+            "$ref": "#/components/schemas/LineageGraph"
+          },
+          "impact": {
+            "$ref": "#/components/schemas/ImpactAssessment"
+          },
+          "root_causes": {
+            "items": {
+              "$ref": "#/components/schemas/RootCauseHypothesis"
+            },
+            "type": "array",
+            "title": "Root Causes"
+          },
+          "remediation": {
+            "items": {
+              "$ref": "#/components/schemas/RemediationAction"
+            },
+            "type": "array",
+            "title": "Remediation"
+          },
+          "safety": {
+            "$ref": "#/components/schemas/SafetyVerdict"
+          },
+          "approval_state": {
+            "$ref": "#/components/schemas/ApprovalState"
+          },
+          "writeback": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/WritebackReceipt"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "evidence": {
+            "items": {
+              "$ref": "#/components/schemas/EvidenceItem"
+            },
+            "type": "array",
+            "title": "Evidence"
+          },
+          "steps": {
+            "items": {
+              "$ref": "#/components/schemas/AgentStep"
+            },
+            "type": "array",
+            "title": "Steps"
+          },
+          "mcp_calls": {
+            "items": {
+              "$ref": "#/components/schemas/McpCallRecord"
+            },
+            "type": "array",
+            "title": "Mcp Calls"
+          },
+          "context_source": {
+            "$ref": "#/components/schemas/DataSource"
+          },
+          "fixture_mode_notice": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fixture Mode Notice"
+          },
+          "narration": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Narration"
+          },
+          "narration_provider": {
+            "type": "string",
+            "title": "Narration Provider",
+            "default": "deterministic"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "incident_id",
+          "scenario_id",
+          "title",
+          "severity",
+          "confidence",
+          "confidence_explanation",
+          "summary",
+          "lineage",
+          "impact",
+          "safety",
+          "approval_state",
+          "context_source"
+        ],
+        "title": "Diagnosis",
+        "description": "The complete structured output of one workflow run.\n\nThis is the object the API returns and the UI renders. It is fully\nself-describing: severity, evidence, impact, remediation, approval state,\nand the provenance of every DataHub fact it relied on."
+      },
+      "EvidenceItem": {
+        "properties": {
+          "label": {
+            "type": "string",
+            "title": "Label"
+          },
+          "detail": {
+            "type": "string",
+            "title": "Detail"
+          },
+          "agent": {
+            "$ref": "#/components/schemas/AgentName"
+          },
+          "source": {
+            "$ref": "#/components/schemas/DataSource"
+          },
+          "references": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "References"
+          },
+          "observed_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Observed At"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "label",
+          "detail",
+          "agent",
+          "source"
+        ],
+        "title": "EvidenceItem",
+        "description": "A single human-readable fact backing a conclusion.\n\nEvidence is what LineageMedic shows instead of chain-of-thought: each item\nnames its origin agent and points at the artifact it was derived from."
+      },
+      "HTTPValidationError": {
+        "properties": {
+          "detail": {
+            "items": {
+              "$ref": "#/components/schemas/ValidationError"
+            },
+            "type": "array",
+            "title": "Detail"
+          }
+        },
+        "type": "object",
+        "title": "HTTPValidationError"
+      },
+      "HealthResponse": {
+        "properties": {
+          "status": {
+            "type": "string",
+            "const": "ok",
+            "title": "Status"
+          },
+          "version": {
+            "type": "string",
+            "title": "Version"
+          },
+          "mode": {
+            "type": "string",
+            "title": "Mode"
+          },
+          "database_present": {
+            "type": "boolean",
+            "title": "Database Present"
+          }
+        },
+        "type": "object",
+        "required": [
+          "status",
+          "version",
+          "mode",
+          "database_present"
+        ],
+        "title": "HealthResponse"
+      },
+      "ImpactAssessment": {
+        "properties": {
+          "source_urn": {
+            "type": "string",
+            "title": "Source Urn"
+          },
+          "assets": {
+            "items": {
+              "$ref": "#/components/schemas/ImpactedAsset"
+            },
+            "type": "array",
+            "title": "Assets"
+          },
+          "affected_count": {
+            "type": "integer",
+            "title": "Affected Count"
+          },
+          "unaffected_count": {
+            "type": "integer",
+            "title": "Unaffected Count"
+          },
+          "production_endpoints_affected": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Production Endpoints Affected"
+          },
+          "ml_models_affected": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Ml Models Affected"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "source_urn",
+          "assets",
+          "affected_count",
+          "unaffected_count"
+        ],
+        "title": "ImpactAssessment",
+        "description": "The full affected/unaffected partition for an incident."
+      },
+      "ImpactState": {
+        "type": "string",
+        "enum": [
+          "affected",
+          "unaffected",
+          "source"
+        ],
+        "title": "ImpactState",
+        "description": "Whether an asset lies in the blast radius of an incident."
+      },
+      "ImpactedAsset": {
+        "properties": {
+          "urn": {
+            "type": "string",
+            "title": "Urn"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "kind": {
+            "$ref": "#/components/schemas/AssetKind"
+          },
+          "state": {
+            "$ref": "#/components/schemas/ImpactState"
+          },
+          "hops_from_source": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Hops From Source"
+          },
+          "rationale": {
+            "type": "string",
+            "title": "Rationale"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "urn",
+          "name",
+          "kind",
+          "state",
+          "rationale"
+        ],
+        "title": "ImpactedAsset",
+        "description": "An asset classified against the blast radius, with the reason why."
+      },
+      "IntegrationStatus": {
+        "properties": {
+          "mode": {
+            "type": "string",
+            "enum": [
+              "fixture",
+              "live"
+            ],
+            "title": "Mode"
+          },
+          "datahub_connected": {
+            "type": "boolean",
+            "title": "Datahub Connected"
+          },
+          "datahub_detail": {
+            "type": "string",
+            "title": "Datahub Detail"
+          },
+          "mcp_connected": {
+            "type": "boolean",
+            "title": "Mcp Connected"
+          },
+          "mcp_detail": {
+            "type": "string",
+            "title": "Mcp Detail"
+          },
+          "llm_provider": {
+            "type": "string",
+            "title": "Llm Provider"
+          },
+          "llm_available": {
+            "type": "boolean",
+            "title": "Llm Available"
+          },
+          "llm_detail": {
+            "type": "string",
+            "title": "Llm Detail"
+          },
+          "fixture_mode_notice": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fixture Mode Notice"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "mode",
+          "datahub_connected",
+          "datahub_detail",
+          "mcp_connected",
+          "mcp_detail",
+          "llm_provider",
+          "llm_available",
+          "llm_detail"
+        ],
+        "title": "IntegrationStatus",
+        "description": "Live status of each external dependency, for the UI status bar."
+      },
+      "LineageGraph": {
+        "properties": {
+          "assets": {
+            "items": {
+              "$ref": "#/components/schemas/Asset"
+            },
+            "type": "array",
+            "title": "Assets"
+          },
+          "source": {
+            "$ref": "#/components/schemas/DataSource"
+          },
+          "retrieved_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Retrieved At"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "assets",
+          "source"
+        ],
+        "title": "LineageGraph",
+        "description": "The subgraph retrieved for one incident, plus its provenance."
+      },
+      "McpCallRecord": {
+        "properties": {
+          "tool": {
+            "type": "string",
+            "title": "Tool"
+          },
+          "arguments": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Arguments"
+          },
+          "ok": {
+            "type": "boolean",
+            "title": "Ok"
+          },
+          "returned_urns": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Returned Urns"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
+          },
+          "duration_ms": {
+            "type": "number",
+            "title": "Duration Ms"
+          },
+          "source": {
+            "$ref": "#/components/schemas/DataSource"
+          },
+          "called_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Called At"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "tool",
+          "arguments",
+          "ok",
+          "duration_ms",
+          "source"
+        ],
+        "title": "McpCallRecord",
+        "description": "An audit record of one MCP tool invocation.\n\nRecorded for every call regardless of outcome, so the UI can prove which\ntools ran, with what (sanitized) arguments, and what URNs came back."
+      },
+      "McpCapabilityResponse": {
+        "properties": {
+          "connected": {
+            "type": "boolean",
+            "title": "Connected"
+          },
+          "detail": {
+            "type": "string",
+            "title": "Detail"
+          },
+          "source": {
+            "type": "string",
+            "title": "Source"
+          },
+          "tools": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Tools"
+          },
+          "recent_calls": {
+            "items": {
+              "$ref": "#/components/schemas/McpCallRecord"
+            },
+            "type": "array",
+            "title": "Recent Calls"
+          }
+        },
+        "type": "object",
+        "required": [
+          "connected",
+          "detail",
+          "source",
+          "tools",
+          "recent_calls"
+        ],
+        "title": "McpCapabilityResponse"
+      },
+      "Owner": {
+        "properties": {
+          "urn": {
+            "type": "string",
+            "title": "Urn"
+          },
+          "display_name": {
+            "type": "string",
+            "title": "Display Name"
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "TECHNICAL_OWNER",
+              "BUSINESS_OWNER",
+              "DATA_STEWARD"
+            ],
+            "title": "Type"
+          },
+          "contact": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Contact"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "urn",
+          "display_name",
+          "type"
+        ],
+        "title": "Owner",
+        "description": "An owning user or group.\n\n``contact`` is a team channel or distribution list, never a personal email\naddress \u2014 fixtures use role accounts so no personal information ships in the\nrepository."
+      },
+      "QualityCheck": {
+        "properties": {
+          "check_id": {
+            "type": "string",
+            "title": "Check Id"
+          },
+          "description": {
+            "type": "string",
+            "title": "Description"
+          },
+          "dataset_urn": {
+            "type": "string",
+            "title": "Dataset Urn"
+          },
+          "column": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Column"
+          },
+          "status": {
+            "$ref": "#/components/schemas/CheckStatus"
+          },
+          "observed_value": {
+            "type": "number",
+            "title": "Observed Value"
+          },
+          "threshold": {
+            "type": "number",
+            "title": "Threshold"
+          },
+          "comparison": {
+            "type": "string",
+            "enum": [
+              "lte",
+              "gte",
+              "eq"
+            ],
+            "title": "Comparison"
+          },
+          "rows_scanned": {
+            "type": "integer",
+            "title": "Rows Scanned"
+          },
+          "failing_rows": {
+            "type": "integer",
+            "title": "Failing Rows",
+            "default": 0
+          },
+          "sample_failing_values": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Sample Failing Values"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "check_id",
+          "description",
+          "dataset_urn",
+          "status",
+          "observed_value",
+          "threshold",
+          "comparison",
+          "rows_scanned"
+        ],
+        "title": "QualityCheck",
+        "description": "One executed data-quality check and its measured result.\n\nThese numbers come from really querying the bundled SQLite database \u2014 they\nare computed, never hard-coded."
+      },
+      "RemediationAction": {
+        "properties": {
+          "action_id": {
+            "type": "string",
+            "title": "Action Id"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "description": {
+            "type": "string",
+            "title": "Description"
+          },
+          "risk": {
+            "$ref": "#/components/schemas/ActionRisk"
+          },
+          "target_urn": {
+            "type": "string",
+            "title": "Target Urn"
+          },
+          "reversible": {
+            "type": "boolean",
+            "title": "Reversible"
+          },
+          "rollback": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rollback"
+          },
+          "requires_approval": {
+            "type": "boolean",
+            "title": "Requires Approval"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "action_id",
+          "title",
+          "description",
+          "risk",
+          "target_urn",
+          "reversible",
+          "requires_approval"
+        ],
+        "title": "RemediationAction",
+        "description": "A single proposed corrective step.\n\n``rollback`` is required for anything not classified ``SAFE``: the\nRemediation Agent may not propose a step it cannot describe undoing."
+      },
+      "ResetResponse": {
+        "properties": {
+          "cleared_incidents": {
+            "type": "integer",
+            "title": "Cleared Incidents"
+          },
+          "message": {
+            "type": "string",
+            "title": "Message"
+          }
+        },
+        "type": "object",
+        "required": [
+          "cleared_incidents",
+          "message"
+        ],
+        "title": "ResetResponse"
+      },
+      "RootCauseHypothesis": {
+        "properties": {
+          "summary": {
+            "type": "string",
+            "title": "Summary"
+          },
+          "suspected_urn": {
+            "type": "string",
+            "title": "Suspected Urn"
+          },
+          "confidence": {
+            "type": "number",
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "title": "Confidence"
+          },
+          "reasoning": {
+            "type": "string",
+            "title": "Reasoning"
+          },
+          "supporting_evidence": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Supporting Evidence"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "summary",
+          "suspected_urn",
+          "confidence",
+          "reasoning"
+        ],
+        "title": "RootCauseHypothesis",
+        "description": "One ranked candidate explanation for the observed failure."
+      },
+      "SafetyVerdict": {
+        "properties": {
+          "approved_actions": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Approved Actions"
+          },
+          "blocked_actions": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Blocked Actions"
+          },
+          "requires_human_approval": {
+            "type": "boolean",
+            "title": "Requires Human Approval"
+          },
+          "blocking_reasons": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object",
+            "title": "Blocking Reasons"
+          },
+          "notes": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Notes"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "approved_actions",
+          "blocked_actions",
+          "requires_human_approval"
+        ],
+        "title": "SafetyVerdict",
+        "description": "The Safety Agent's ruling on a remediation plan."
+      },
+      "ScenarioSummary": {
+        "properties": {
+          "scenario_id": {
+            "type": "string",
+            "title": "Scenario Id"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "description": {
+            "type": "string",
+            "title": "Description"
+          },
+          "expected_severity": {
+            "$ref": "#/components/schemas/Severity"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "scenario_id",
+          "title",
+          "description",
+          "expected_severity"
+        ],
+        "title": "ScenarioSummary",
+        "description": "Catalog entry for a runnable scenario."
+      },
+      "SchemaField": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "native_type": {
+            "type": "string",
+            "title": "Native Type"
+          },
+          "nullable": {
+            "type": "boolean",
+            "title": "Nullable",
+            "default": true
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "name",
+          "native_type"
+        ],
+        "title": "SchemaField",
+        "description": "One column of a dataset schema, as reported by DataHub."
+      },
+      "Severity": {
+        "type": "string",
+        "enum": [
+          "critical",
+          "warning",
+          "healthy"
+        ],
+        "title": "Severity",
+        "description": "Incident severity, ordered."
+      },
+      "ValidationError": {
+        "properties": {
+          "loc": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                }
+              ]
+            },
+            "type": "array",
+            "title": "Location"
+          },
+          "msg": {
+            "type": "string",
+            "title": "Message"
+          },
+          "type": {
+            "type": "string",
+            "title": "Error Type"
+          },
+          "input": {
+            "title": "Input"
+          },
+          "ctx": {
+            "type": "object",
+            "title": "Context"
+          }
+        },
+        "type": "object",
+        "required": [
+          "loc",
+          "msg",
+          "type"
+        ],
+        "title": "ValidationError"
+      },
+      "WritebackReceipt": {
+        "properties": {
+          "status": {
+            "$ref": "#/components/schemas/WritebackStatus"
+          },
+          "target_urns": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Target Urns"
+          },
+          "aspects_written": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Aspects Written"
+          },
+          "tags_added": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Tags Added"
+          },
+          "note": {
+            "type": "string",
+            "title": "Note"
+          },
+          "datahub_urls": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Datahub Urls"
+          },
+          "source": {
+            "$ref": "#/components/schemas/DataSource"
+          },
+          "attempted_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Attempted At"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "status",
+          "note",
+          "source"
+        ],
+        "title": "WritebackReceipt",
+        "description": "Proof (or honest refusal) of a DataHub metadata mutation.\n\nIn fixture mode this is always ``SKIPPED_FIXTURE_MODE`` with an empty\n``aspects_written``. The application never emits ``APPLIED`` unless a live\nadapter reported a real, verified mutation."
+      },
+      "WritebackStatus": {
+        "type": "string",
+        "enum": [
+          "applied",
+          "blocked_pending_approval",
+          "skipped_fixture_mode",
+          "failed"
+        ],
+        "title": "WritebackStatus",
+        "description": "Terminal state of an attempted DataHub metadata writeback."
+      }
+    }
+  }
+}

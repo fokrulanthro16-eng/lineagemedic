@@ -1,0 +1,41 @@
+{
+  "name": "lineagemedic-web",
+  "private": true,
+  "version": "0.1.0",
+  "license": "Apache-2.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc -b && vite build",
+    "lint": "oxlint",
+    "typecheck": "tsc -b --force",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage",
+    "preview": "vite preview",
+    "_comment:generate:types": "Run via npx: openapi-typescript peers on typescript@5 while this app is on 6, so installing it as a devDependency would fail peer resolution. It is codegen only and never bundled.",
+    "generate:types": "npx --yes openapi-typescript@7 ../../scripts/openapi.json -o src/api/schema.ts"
+  },
+  "dependencies": {
+    "react": "^19.2.7",
+    "react-dom": "^19.2.7"
+  },
+  "devDependencies": {
+    "@testing-library/jest-dom": "^7.0.0",
+    "@testing-library/react": "^16.3.2",
+    "@testing-library/user-event": "^14.6.1",
+    "@types/node": "^24.13.2",
+    "@types/react": "^19.2.17",
+    "@types/react-dom": "^19.2.3",
+    "@vitejs/plugin-react": "^6.0.3",
+    "@vitest/coverage-v8": "^4.1.10",
+    "autoprefixer": "^10.5.4",
+    "jsdom": "^29.1.1",
+    "oxlint": "^1.71.0",
+    "postcss": "^8.5.24",
+    "tailwindcss": "^3.4.19",
+    "typescript": "~6.0.2",
+    "vite": "^8.1.1",
+    "vitest": "^4.1.10"
+  }
+}
