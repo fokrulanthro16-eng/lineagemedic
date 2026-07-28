@@ -1,0 +1,161 @@
+# Continuous integration for LineageMedic.
+#
+# Runs the same gates scripts/test.ps1 runs locally, in the same order, so a
+# green local run and a green CI run mean the same thing. CI runs on Linux
+# while development happens on Windows; that difference is deliberate, because
+# the demo has to survive being cloned into a Codespace for the DataHub phase.
+#
+# No job here requires DataHub, Docker, a network service, or a paid API. The
+# application runs in fixture mode, which is the honest default.
+
+name: CI
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+  workflow_dispatch:
+
+# A newer push to the same branch makes an in-flight run obsolete.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  PYTHON_VERSION: "3.11"
+  NODE_VERSION: "22"
+
+jobs:
+  backend:
+    name: Backend (ruff, mypy, pytest)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+
+      - name: Install workspace
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e ./packages/lineagemedic
+          python -m pip install -e ./apps/api
+          python -m pip install pytest pytest-cov ruff mypy httpx 'uvicorn[standard]'
+
+      - name: Lint (ruff)
+        run: ruff check .
+
+      - name: Type check (mypy)
+        run: mypy packages/lineagemedic/src/lineagemedic apps/api/lineagemedic_api tests
+
+      - name: Tests (pytest)
+        run: pytest --cov=lineagemedic --cov=lineagemedic_api --cov-report=term-missing
+
+  frontend:
+    name: Frontend (tsc, vitest, build)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: apps/web/package-lock.json
+
+      - name: Install
+        working-directory: apps/web
+        run: npm ci
+
+      - name: Type check
+        working-directory: apps/web
+        run: npm run typecheck
+
+      - name: Tests (vitest)
+        working-directory: apps/web
+        run: npm run test:coverage
+
+      # A passing type check does not prove the app bundles; the production
+      # build is what the demo is served from, so it gates too.
+      - name: Production build
+        working-directory: apps/web
+        run: npm run build
+
+  api-contract:
+    name: API contract is not stale
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Install backend
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e ./packages/lineagemedic
+          python -m pip install -e ./apps/api
+
+      # The frontend's types are generated from the OpenAPI schema, which is
+      # generated from the Pydantic models. Regenerating both and diffing
+      # catches a response model that changed without the types following it.
+      # This mirrors scripts/check_api_types.ps1 for Linux runners.
+      - name: Regenerate the API schema and types
+        run: |
+          python scripts/export_openapi.py
+          npx --yes openapi-typescript@7 scripts/openapi.json -o apps/web/src/api/schema.ts
+
+      - name: Fail if the committed contract is out of date
+        run: |
+          if ! git diff --quiet -- scripts/openapi.json apps/web/src/api/schema.ts; then
+            echo "::error::The generated API contract is out of date."
+            echo "Run scripts/check_api_types.ps1 and commit the regenerated files."
+            git --no-pager diff -- scripts/openapi.json apps/web/src/api/schema.ts
+            exit 1
+          fi
+          echo "API schema and frontend types are in sync."
+
+  examples:
+    name: Committed examples match real runs
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+
+      - name: Install backend
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e ./packages/lineagemedic
+          python -m pip install -e ./apps/api
+
+      # examples/*.json are captured from real workflow output rather than
+      # written by hand. Regenerating them here proves the committed payloads
+      # still describe what the code actually produces -- so the examples
+      # cannot drift into advertising behaviour that no longer exists.
+      - name: Regenerate examples
+        run: python scripts/export_examples.py
+
+      - name: Fail if the committed examples are stale
+        run: |
+          if ! git diff --quiet -- examples/; then
+            echo "::error::Committed examples no longer match real workflow output."
+            echo "Run: py -3.11 scripts/export_examples.py and commit the result."
+            git --no-pager diff --stat -- examples/
+            exit 1
+          fi
+          echo "Examples match live workflow output."
