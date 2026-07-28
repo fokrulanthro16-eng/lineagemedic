@@ -1,0 +1,33 @@
+# Normalise line endings so the repository content does not depend on which
+# platform a contributor happens to use.
+#
+# This matters more than usual here: CI regenerates scripts/openapi.json,
+# apps/web/src/api/schema.ts, and examples/*.json on Linux and fails the build
+# if they differ from what is committed. Without a declared normalisation those
+# jobs would fail on line endings alone for anyone whose core.autocrlf differs
+# from the machine the files were generated on.
+* text=auto eol=lf
+
+# PowerShell scripts are Windows-facing. CRLF is what powershell.exe and the
+# Windows editors expect, and nothing in CI diffs them.
+*.ps1 text eol=crlf
+
+# Binary — never normalise, never diff as text.
+*.db binary
+*.sqlite binary
+*.sqlite3 binary
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.pdf binary
+*.woff binary
+*.woff2 binary
+
+# Generated. Collapsed in GitHub diffs and excluded from language statistics,
+# because reviewing them line by line is not useful -- the check that matters
+# is whether they match a fresh regeneration, which CI enforces.
+apps/web/src/api/schema.ts linguist-generated=true
+scripts/openapi.json       linguist-generated=true
+apps/web/package-lock.json linguist-generated=true
