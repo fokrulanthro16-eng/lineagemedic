@@ -19,13 +19,13 @@ from __future__ import annotations
 from lineagemedic.models import (
     ActionRisk,
     AgentName,
+    DataSource,
     EvidenceItem,
     ImpactAssessment,
     ImpactState,
     RemediationAction,
     SafetyVerdict,
 )
-from lineagemedic.models import DataSource
 
 
 class SafetyAgent:

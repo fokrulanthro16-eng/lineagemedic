@@ -1,0 +1,1 @@
+"""LineageMedic FastAPI application."""

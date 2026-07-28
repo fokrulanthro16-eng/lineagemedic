@@ -28,7 +28,7 @@ from __future__ import annotations
 
 import random
 import sqlite3
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 # Fixed seed: identical data on every machine, so test assertions can be exact.
@@ -38,7 +38,7 @@ BILLING_ROWS = 300
 
 # Reference "now" for the generated data. Fixed rather than wall-clock so
 # freshness deltas stay stable across runs and CI.
-REFERENCE_NOW = datetime(2026, 7, 28, 12, 0, 0, tzinfo=timezone.utc)
+REFERENCE_NOW = datetime(2026, 7, 28, 12, 0, 0, tzinfo=UTC)
 
 # Planted-defect volumes, asserted directly by the Quality Agent tests.
 INVALID_AGE_ROWS = 37
@@ -146,9 +146,11 @@ def _seed_patient_branch(conn: sqlite3.Connection, rng: random.Random) -> None:
     invalid_age_ids = set(shuffled[:INVALID_AGE_ROWS])
     null_admission_ids = set(shuffled[INVALID_AGE_ROWS : INVALID_AGE_ROWS + NULL_ADMISSION_ROWS])
 
-    raw_rows = []
+    # (patient_id, age, sex, admission_iso, discharge_iso, diagnosis, ingested_iso).
+    # Dates are stored as ISO strings, matching the TEXT columns in the schema.
+    raw_rows: list[tuple[str, int, str, str | None, str | None, str, str]] = []
     for pid in ids:
-        if pid in invalid_age_ids:
+        if pid in invalid_age_ids:  # noqa: SIM108 - the comment below belongs to this branch
             # Two flavours of out-of-range so the sample values are informative:
             # a negative sentinel and an implausible centenarian overflow.
             age = rng.choice([-1, -7, 148, 151, 999])
@@ -183,11 +185,11 @@ def _seed_patient_branch(conn: sqlite3.Connection, rng: random.Random) -> None:
     # Cause Agent is expected to localise to raw_patients.age.
     staged = _iso(REFERENCE_NOW - timedelta(hours=STAGING_STALENESS_HOURS))
     staging_rows = []
-    for pid, age, sex, admission, discharge, dx, _ in raw_rows:
-        if admission is None:
+    for pid, row_age, row_sex, adm_iso, dis_iso, row_dx, _ in raw_rows:
+        if adm_iso is None or dis_iso is None:
             continue
-        los = (datetime.fromisoformat(discharge) - datetime.fromisoformat(admission)).days
-        staging_rows.append((pid, age, sex, admission, los, dx, staged))
+        los = (datetime.fromisoformat(dis_iso) - datetime.fromisoformat(adm_iso)).days
+        staging_rows.append((pid, row_age, row_sex, adm_iso, los, row_dx, staged))
     conn.executemany(
         "INSERT INTO staging_patients VALUES (?, ?, ?, ?, ?, ?, ?)",
         staging_rows,

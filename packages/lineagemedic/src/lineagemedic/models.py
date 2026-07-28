@@ -16,7 +16,7 @@ Two conventions matter throughout:
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from enum import Enum
 from typing import Any, Literal
 
@@ -25,7 +25,7 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator, model_valida
 
 def utcnow() -> datetime:
     """Timezone-aware UTC now. Used as the default factory for every timestamp."""
-    return datetime.now(timezone.utc)
+    return datetime.now(UTC)
 
 
 class StrictModel(BaseModel):

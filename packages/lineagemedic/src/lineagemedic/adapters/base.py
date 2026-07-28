@@ -72,7 +72,9 @@ class MetadataPort(Protocol):
         """
         ...
 
-    def get_lineage(self, urn: str, upstream_depth: int = 3, downstream_depth: int = 3) -> LineageGraph:
+    def get_lineage(
+        self, urn: str, upstream_depth: int = 3, downstream_depth: int = 3
+    ) -> LineageGraph:
         """Traverse lineage in both directions from ``urn``."""
         ...
 

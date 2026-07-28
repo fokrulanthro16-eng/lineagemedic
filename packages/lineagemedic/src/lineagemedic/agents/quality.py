@@ -14,7 +14,7 @@ that offending values exist.
 from __future__ import annotations
 
 import sqlite3
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 from lineagemedic.fixtures.graph import TABLE_TO_URN
@@ -33,7 +33,7 @@ class QualityAgent:
     def __init__(self, db_path: Path, *, now: datetime | None = None) -> None:
         self._db_path = Path(db_path)
         # Injectable clock so freshness checks are deterministic under test.
-        self._now = now or datetime.now(timezone.utc)
+        self._now = now or datetime.now(UTC)
 
     def run(self, scenario: Scenario) -> list[QualityCheck]:
         """Execute every check in ``scenario`` and return measured results."""
@@ -137,7 +137,7 @@ class QualityAgent:
             return self._build(spec, float("inf"), total, total, [])
         latest = datetime.fromisoformat(str(latest_raw))
         if latest.tzinfo is None:
-            latest = latest.replace(tzinfo=timezone.utc)
+            latest = latest.replace(tzinfo=UTC)
         age_hours = (self._now - latest).total_seconds() / 3600.0
         # Freshness reports zero failing *rows*: every row is structurally
         # valid, the table is merely late. Counting all rows as "failing" here

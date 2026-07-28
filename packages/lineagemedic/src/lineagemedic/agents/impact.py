@@ -47,18 +47,28 @@ class ImpactAgent:
         # Hop distance from the nearest failing dataset, over lineage edges only.
         hops: dict[str, int] = {}
         for origin in failing_urns:
-            hops.setdefault(origin, 0)
             for distance, urn in self._distances(graph, origin):
                 if urn not in hops or distance < hops[urn]:
                     hops[urn] = distance
+        # A dataset that failed its own check is an origin at distance 0,
+        # regardless of also being reachable from another failing dataset.
+        # Applied after the traversal so a propagated distance cannot overwrite
+        # it -- otherwise the result would depend on set iteration order.
+        for origin in failing_urns:
+            hops[origin] = 0
 
         assessed: list[ImpactedAsset] = []
         for asset in graph.assets:
             if asset.urn in failing_urns:
                 state = ImpactState.SOURCE
+                own_failures = sum(
+                    1
+                    for c in checks
+                    if c.dataset_urn == asset.urn and c.status is CheckStatus.FAIL
+                )
                 rationale = (
-                    f"Failed {sum(1 for c in checks if c.dataset_urn == asset.urn and c.status is CheckStatus.FAIL)}"
-                    " quality check(s) measured directly against this dataset."
+                    f"Failed {own_failures} quality check(s) measured directly "
+                    "against this dataset."
                 )
             elif asset.urn in hops:
                 state = ImpactState.AFFECTED
@@ -139,7 +149,9 @@ class ImpactAgent:
                 ),
                 agent=AgentName.IMPACT,
                 source=source,
-                references=[a.urn for a in assessment.assets if a.state is not ImpactState.UNAFFECTED],
+                references=[
+                    a.urn for a in assessment.assets if a.state is not ImpactState.UNAFFECTED
+                ],
             )
         ]
         if assessment.production_endpoints_affected:

@@ -20,7 +20,7 @@ from __future__ import annotations
 import time
 import uuid
 from collections.abc import Callable
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 from lineagemedic.adapters.base import MetadataPort, WritebackPort
@@ -55,7 +55,7 @@ class _Timer:
     """Records wall-clock duration for one agent step."""
 
     def __init__(self) -> None:
-        self.started_at = datetime.now(timezone.utc)
+        self.started_at = datetime.now(UTC)
         self._t0 = time.perf_counter()
 
     def stop(self) -> float:

@@ -35,16 +35,7 @@ where = ["src"]
 [tool.setuptools.package-data]
 lineagemedic = ["py.typed", "fixtures/*.json", "data/*.sql"]
 
-[tool.ruff]
-line-length = 100
-target-version = "py311"
-
-[tool.ruff.lint]
-select = ["E", "F", "I", "UP", "B", "SIM", "N", "RUF"]
-ignore = ["B008"]
-
-[tool.mypy]
-python_version = "3.11"
-strict = true
-warn_unreachable = true
-plugins = []
+# Lint and type-check settings live in the workspace root pyproject.toml.
+# Ruff resolves configuration from the *nearest* pyproject to each file, so a
+# [tool.ruff] table here would silently shadow the root config for everything
+# under this package -- which is exactly how the two drifted apart before.

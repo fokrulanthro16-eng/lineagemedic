@@ -62,7 +62,6 @@ class RootCauseAgent:
                 worst_ratio=max((c.failure_ratio for c in urn_checks), default=0.0),
             )
 
-            worst = max(urn_checks, key=lambda c: c.failure_ratio)
             columns = sorted({c.column for c in urn_checks if c.column})
             column_text = f" in column(s) {', '.join(columns)}" if columns else ""
 
@@ -75,7 +74,8 @@ class RootCauseAgent:
                 summary = f"Defect originates in {asset.name}{column_text}"
             else:
                 upstream_names = ", ".join(
-                    (graph.by_urn(u).name if graph.by_urn(u) else u) for u in failing_upstreams
+                    upstream.name if (upstream := graph.by_urn(u)) is not None else u
+                    for u in failing_upstreams
                 )
                 reasoning = (
                     f"{asset.name} failed {len(urn_checks)} check(s){column_text}, but its "
