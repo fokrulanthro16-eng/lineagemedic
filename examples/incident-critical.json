@@ -1,0 +1,1225 @@
+{
+  "incident_id": "LM-EXAMPLE",
+  "scenario_id": "critical-age-corruption",
+  "title": "Invalid patient ages reaching the production readmission model",
+  "severity": "critical",
+  "confidence": 0.8,
+  "confidence_explanation": "Top hypothesis scores 76% from lineage structure; 2 independent check(s) failed on the suspected asset; lineage resolved 7 asset(s) with no gaps; context came from committed fixtures rather than a live DataHub instance.",
+  "summary": "5 of 5 quality check(s) failed. Defect originates in raw_patients in column(s) admission_date, age. 5 asset(s) are in the blast radius, including 1 ML model(s) and 1 production endpoint(s). 2 asset(s) were examined and cleared, and remain in service.",
+  "quality_checks": [
+    {
+      "check_id": "age-range",
+      "description": "raw_patients.age must fall within a plausible human range (0-130).",
+      "dataset_urn": "urn:li:dataset:(urn:li:dataPlatform:sqlite,lineagemedic.raw_patients,PROD)",
+      "column": "age",
+      "status": "fail",
+      "observed_value": 0.074,
+      "threshold": 0.01,
+      "comparison": "lte",
+      "rows_scanned": 500,
+      "failing_rows": 37,
+      "sample_failing_values": [
+        "-7",
+        "-7",
+        "-7",
+        "-7",
+        "-7"
+      ]
+    },
+    {
+      "check_id": "admission-null-rate",
+      "description": "raw_patients.admission_date is required by the feature pipeline.",
+      "dataset_urn": "urn:li:dataset:(urn:li:dataPlatform:sqlite,lineagemedic.raw_patients,PROD)",
+      "column": "admission_date",
+      "status": "fail",
+      "observed_value": 0.044,
+      "threshold": 0.02,
+      "comparison": "lte",
+      "rows_scanned": 500,
+      "failing_rows": 22,
+      "sample_failing_values": [
+        "NULL"
+      ]
+    },
+    {
+      "check_id": "age-range-propagated",
+      "description": "staging_patients.age must be validated before feature computation.",
+      "dataset_urn": "urn:li:dataset:(urn:li:dataPlatform:sqlite,lineagemedic.staging_patients,PROD)",
+      "column": "age",
+      "status": "fail",
+      "observed_value": 0.07740585774058577,
+      "threshold": 0.01,
+      "comparison": "lte",
+      "rows_scanned": 478,
+      "failing_rows": 37,
+      "sample_failing_values": [
+        "-7",
+        "-7",
+        "-7",
+        "-7",
+        "-7"
+      ]
+    },
+    {
+      "check_id": "staging-freshness",
+      "description": "staging_patients must refresh at least every 24 hours.",
+      "dataset_urn": "urn:li:dataset:(urn:li:dataPlatform:sqlite,lineagemedic.staging_patients,PROD)",
+      "column": "last_refreshed_at",
+      "status": "fail",
+      "observed_value": 52.0,
+      "threshold": 24.0,
+      "comparison": "lte",
+      "rows_scanned": 478,
+      "failing_rows": 0,
+      "sample_failing_values": [
+        "2026-07-26T08:00:00+00:00"
+      ]
+    },
+    {
+      "check_id": "feature-unknown-bucket",
+      "description": "patient_features.age_bucket should rarely be 'unknown'; a high rate means invalid ages reached the model.",
+      "dataset_urn": "urn:li:dataset:(urn:li:dataPlatform:feast,lineagemedic.patient_features,PROD)",
+      "column": "age_bucket",
+      "status": "fail",
+      "observed_value": 0.07740585774058577,
+      "threshold": 0.01,
+      "comparison": "lte",
+      "rows_scanned": 478,
+      "failing_rows": 37,
+      "sample_failing_values": [
+        "unknown",
+        "unknown",
+        "unknown",
+        "unknown",
+        "unknown"
+      ]
+    }
+  ],
+  "lineage": {
+    "assets": [
+      {
+        "urn": "urn:li:dataset:(urn:li:dataPlatform:sqlite,lineagemedic.raw_patients,PROD)",
+        "name": "raw_patients",
+        "kind": "dataset",
+        "platform": "sqlite",
+        "description": "Raw patient admissions landed from the hospital EHR export. No validation is applied at this layer.",
+        "tags": [
+          "healthcare",
+          "phi",
+          "bronze",
+          "source-of-truth"
+        ],
+        "owners": [
+          {
+            "urn": "urn:li:corpGroup:data-platform",
+            "display_name": "Data Platform Team",
+            "type": "TECHNICAL_OWNER",
+            "contact": "data-platform@lineagemedic.example"
+          },
+          {
+            "urn": "urn:li:corpGroup:health-data-stewards",
+            "display_name": "Health Data Stewards",
+            "type": "DATA_STEWARD",
+            "contact": "data-stewards@lineagemedic.example"
+          }
+        ],
+        "schema_fields": [
+          {
+            "name": "patient_id",
+            "native_type": "TEXT",
+            "nullable": false,
+            "description": "Pseudonymised patient identifier."
+          },
+          {
+            "name": "age",
+            "native_type": "INTEGER",
+            "nullable": true,
+            "description": "Patient age in years at admission. Expected range 0-130."
+          },
+          {
+            "name": "sex",
+            "native_type": "TEXT",
+            "nullable": true,
+            "description": null
+          },
+          {
+            "name": "admission_date",
+            "native_type": "TEXT",
+            "nullable": true,
+            "description": "Admission timestamp. Required by the feature pipeline."
+          },
+          {
+            "name": "discharge_date",
+            "native_type": "TEXT",
+            "nullable": true,
+            "description": null
+          },
+          {
+            "name": "primary_dx",
+            "native_type": "TEXT",
+            "nullable": true,
+            "description": null
+          },
+          {
+            "name": "ingested_at",
+            "native_type": "TEXT",
+            "nullable": false,
+            "description": null
+          }
+        ],
+        "upstreams": [],
+        "downstreams": [
+          "urn:li:dataset:(urn:li:dataPlatform:sqlite,lineagemedic.staging_patients,PROD)"
+        ],
+        "source": "fixture",
+        "datahub_url": "http://localhost:9002/dataset/urn:li:dataset:(urn:li:dataPlatform:sqlite,lineagemedic.raw_patients,PROD)"
+      },
+      {
+        "urn": "urn:li:dataset:(urn:li:dataPlatform:sqlite,lineagemedic.staging_patients,PROD)",
+        "name": "staging_patients",
+        "kind": "dataset",
+        "platform": "sqlite",
+        "description": "Cleaned patient admissions. Drops rows with a NULL admission_date but performs no range validation on age.",
+        "tags": [
+          "healthcare",
+          "phi",
+          "silver"
+        ],
+        "owners": [
+          {
+            "urn": "urn:li:corpGroup:data-platform",
+            "display_name": "Data Platform Team",
+            "type": "TECHNICAL_OWNER",
+            "contact": "data-platform@lineagemedic.example"
+          }
+        ],
+        "schema_fields": [
+          {
+            "name": "patient_id",
+            "native_type": "TEXT",
+            "nullable": false,
+            "description": null
+          },
+          {
+            "name": "age",
+            "native_type": "INTEGER",
+            "nullable": true,
+            "description": "Passed through from raw_patients without validation."
+          },
+          {
+            "name": "sex",
+            "native_type": "TEXT",
+            "nullable": true,
+            "description": null
+          },
+          {
+            "name": "admission_date",
+            "native_type": "TEXT",
+            "nullable": false,
+            "description": null
+          },
+          {
+            "name": "length_of_stay",
+            "native_type": "INTEGER",
+            "nullable": true,
+            "description": null
+          },
+          {
+            "name": "primary_dx",
+            "native_type": "TEXT",
+            "nullable": true,
+            "description": null
+          },
+          {
+            "name": "last_refreshed_at",
+            "native_type": "TEXT",
+            "nullable": false,
+            "description": "Watermark written by the staging job."
+          }
+        ],
+        "upstreams": [
+          "urn:li:dataset:(urn:li:dataPlatform:sqlite,lineagemedic.raw_patients,PROD)"
+        ],
+        "downstreams": [
+          "urn:li:dataset:(urn:li:dataPlatform:feast,lineagemedic.patient_features,PROD)"
+        ],
+        "source": "fixture",
+        "datahub_url": "http://localhost:9002/dataset/urn:li:dataset:(urn:li:dataPlatform:sqlite,lineagemedic.staging_patients,PROD)"
+      },
+      {
+        "urn": "urn:li:dataset:(urn:li:dataPlatform:feast,lineagemedic.patient_features,PROD)",
+        "name": "patient_features",
+        "kind": "feature_table",
+        "platform": "feast",
+        "description": "Model-ready features for readmission risk. age_bucket is derived from staging_patients.age and falls back to 'unknown' when the value is out of range.",
+        "tags": [
+          "ml-feature",
+          "healthcare",
+          "gold",
+          "serving"
+        ],
+        "owners": [
+          {
+            "urn": "urn:li:corpGroup:ml-platform",
+            "display_name": "ML Platform Team",
+            "type": "TECHNICAL_OWNER",
+            "contact": "ml-platform@lineagemedic.example"
+          },
+          {
+            "urn": "urn:li:corpGroup:clinical-analytics",
+            "display_name": "Clinical Analytics",
+            "type": "BUSINESS_OWNER",
+            "contact": "clinical-analytics@lineagemedic.example"
+          }
+        ],
+        "schema_fields": [
+          {
+            "name": "patient_id",
+            "native_type": "TEXT",
+            "nullable": false,
+            "description": null
+          },
+          {
+            "name": "age_bucket",
+            "native_type": "TEXT",
+            "nullable": true,
+            "description": "18-34 / 35-54 / 55-74 / 75+ / unknown."
+          },
+          {
+            "name": "prior_admissions",
+            "native_type": "INTEGER",
+            "nullable": true,
+            "description": null
+          },
+          {
+            "name": "length_of_stay",
+            "native_type": "INTEGER",
+            "nullable": true,
+            "description": null
+          },
+          {
+            "name": "chronic_flag",
+            "native_type": "INTEGER",
+            "nullable": true,
+            "description": null
+          },
+          {
+            "name": "computed_at",
+            "native_type": "TEXT",
+            "nullable": false,
+            "description": null
+          }
+        ],
+        "upstreams": [
+          "urn:li:dataset:(urn:li:dataPlatform:sqlite,lineagemedic.staging_patients,PROD)"
+        ],
+        "downstreams": [
+          "urn:li:mlModel:(urn:li:dataPlatform:mlflow,lineagemedic.readmission_risk_model,PROD)"
+        ],
+        "source": "fixture",
+        "datahub_url": "http://localhost:9002/dataset/urn:li:dataset:(urn:li:dataPlatform:feast,lineagemedic.patient_features,PROD)"
+      },
+      {
+        "urn": "urn:li:mlModel:(urn:li:dataPlatform:mlflow,lineagemedic.readmission_risk_model,PROD)",
+        "name": "readmission_risk_model",
+        "kind": "ml_model",
+        "platform": "mlflow",
+        "description": "Gradient-boosted classifier predicting 30-day readmission risk. Consumes patient_features; age_bucket is a top-3 predictor.",
+        "tags": [
+          "ml-model",
+          "healthcare",
+          "production",
+          "clinical-decision-support"
+        ],
+        "owners": [
+          {
+            "urn": "urn:li:corpGroup:ml-platform",
+            "display_name": "ML Platform Team",
+            "type": "TECHNICAL_OWNER",
+            "contact": "ml-platform@lineagemedic.example"
+          },
+          {
+            "urn": "urn:li:corpGroup:clinical-analytics",
+            "display_name": "Clinical Analytics",
+            "type": "BUSINESS_OWNER",
+            "contact": "clinical-analytics@lineagemedic.example"
+          }
+        ],
+        "schema_fields": [],
+        "upstreams": [
+          "urn:li:dataset:(urn:li:dataPlatform:feast,lineagemedic.patient_features,PROD)"
+        ],
+        "downstreams": [
+          "urn:li:mlModelDeployment:(urn:li:dataPlatform:sagemaker,lineagemedic.production_readmission_endpoint,PROD)"
+        ],
+        "source": "fixture",
+        "datahub_url": "http://localhost:9002/mlModel/urn:li:mlModel:(urn:li:dataPlatform:mlflow,lineagemedic.readmission_risk_model,PROD)"
+      },
+      {
+        "urn": "urn:li:mlModelDeployment:(urn:li:dataPlatform:sagemaker,lineagemedic.production_readmission_endpoint,PROD)",
+        "name": "production_readmission_endpoint",
+        "kind": "endpoint",
+        "platform": "sagemaker",
+        "description": "Live inference endpoint serving readmission scores to the discharge planning application.",
+        "tags": [
+          "production",
+          "endpoint",
+          "clinical-decision-support",
+          "tier-1"
+        ],
+        "owners": [
+          {
+            "urn": "urn:li:corpGroup:ml-platform",
+            "display_name": "ML Platform Team",
+            "type": "TECHNICAL_OWNER",
+            "contact": "ml-platform@lineagemedic.example"
+          }
+        ],
+        "schema_fields": [],
+        "upstreams": [
+          "urn:li:mlModel:(urn:li:dataPlatform:mlflow,lineagemedic.readmission_risk_model,PROD)"
+        ],
+        "downstreams": [],
+        "source": "fixture",
+        "datahub_url": "http://localhost:9002/mlModelDeployment/urn:li:mlModelDeployment:(urn:li:dataPlatform:sagemaker,lineagemedic.production_readmission_endpoint,PROD)"
+      },
+      {
+        "urn": "urn:li:dataset:(urn:li:dataPlatform:sqlite,lineagemedic.raw_billing,PROD)",
+        "name": "raw_billing",
+        "kind": "dataset",
+        "platform": "sqlite",
+        "description": "Raw claims extracted from the billing system.",
+        "tags": [
+          "billing",
+          "finance",
+          "bronze"
+        ],
+        "owners": [
+          {
+            "urn": "urn:li:corpGroup:revenue-cycle",
+            "display_name": "Revenue Cycle Team",
+            "type": "TECHNICAL_OWNER",
+            "contact": "revenue-cycle@lineagemedic.example"
+          }
+        ],
+        "schema_fields": [
+          {
+            "name": "claim_id",
+            "native_type": "TEXT",
+            "nullable": false,
+            "description": null
+          },
+          {
+            "name": "patient_id",
+            "native_type": "TEXT",
+            "nullable": true,
+            "description": "Soft reference to a patient. Not a lineage edge: billing does not read patient attributes."
+          },
+          {
+            "name": "amount_cents",
+            "native_type": "INTEGER",
+            "nullable": false,
+            "description": null
+          },
+          {
+            "name": "payer",
+            "native_type": "TEXT",
+            "nullable": false,
+            "description": null
+          },
+          {
+            "name": "claim_date",
+            "native_type": "TEXT",
+            "nullable": false,
+            "description": null
+          },
+          {
+            "name": "ingested_at",
+            "native_type": "TEXT",
+            "nullable": false,
+            "description": null
+          }
+        ],
+        "upstreams": [],
+        "downstreams": [
+          "urn:li:dataset:(urn:li:dataPlatform:sqlite,lineagemedic.billing_summary,PROD)"
+        ],
+        "source": "fixture",
+        "datahub_url": "http://localhost:9002/dataset/urn:li:dataset:(urn:li:dataPlatform:sqlite,lineagemedic.raw_billing,PROD)"
+      },
+      {
+        "urn": "urn:li:dataset:(urn:li:dataPlatform:sqlite,lineagemedic.billing_summary,PROD)",
+        "name": "billing_summary",
+        "kind": "dataset",
+        "platform": "sqlite",
+        "description": "Claim counts and totals per payer. Feeds finance reporting only.",
+        "tags": [
+          "billing",
+          "finance",
+          "gold",
+          "reporting"
+        ],
+        "owners": [
+          {
+            "urn": "urn:li:corpGroup:revenue-cycle",
+            "display_name": "Revenue Cycle Team",
+            "type": "TECHNICAL_OWNER",
+            "contact": "revenue-cycle@lineagemedic.example"
+          }
+        ],
+        "schema_fields": [
+          {
+            "name": "payer",
+            "native_type": "TEXT",
+            "nullable": false,
+            "description": null
+          },
+          {
+            "name": "claim_count",
+            "native_type": "INTEGER",
+            "nullable": false,
+            "description": null
+          },
+          {
+            "name": "total_cents",
+            "native_type": "INTEGER",
+            "nullable": false,
+            "description": null
+          },
+          {
+            "name": "last_refreshed_at",
+            "native_type": "TEXT",
+            "nullable": false,
+            "description": null
+          }
+        ],
+        "upstreams": [
+          "urn:li:dataset:(urn:li:dataPlatform:sqlite,lineagemedic.raw_billing,PROD)"
+        ],
+        "downstreams": [],
+        "source": "fixture",
+        "datahub_url": "http://localhost:9002/dataset/urn:li:dataset:(urn:li:dataPlatform:sqlite,lineagemedic.billing_summary,PROD)"
+      }
+    ],
+    "source": "fixture",
+    "retrieved_at": "2026-07-28T12:00:00+00:00"
+  },
+  "impact": {
+    "source_urn": "urn:li:dataset:(urn:li:dataPlatform:sqlite,lineagemedic.raw_patients,PROD)",
+    "assets": [
+      {
+        "urn": "urn:li:dataset:(urn:li:dataPlatform:sqlite,lineagemedic.raw_patients,PROD)",
+        "name": "raw_patients",
+        "kind": "dataset",
+        "state": "source",
+        "hops_from_source": 0,
+        "rationale": "Failed 2 quality check(s) measured directly against this dataset."
+      },
+      {
+        "urn": "urn:li:dataset:(urn:li:dataPlatform:sqlite,lineagemedic.staging_patients,PROD)",
+        "name": "staging_patients",
+        "kind": "dataset",
+        "state": "source",
+        "hops_from_source": 0,
+        "rationale": "Failed 2 quality check(s) measured directly against this dataset."
+      },
+      {
+        "urn": "urn:li:dataset:(urn:li:dataPlatform:feast,lineagemedic.patient_features,PROD)",
+        "name": "patient_features",
+        "kind": "feature_table",
+        "state": "source",
+        "hops_from_source": 0,
+        "rationale": "Failed 1 quality check(s) measured directly against this dataset."
+      },
+      {
+        "urn": "urn:li:mlModel:(urn:li:dataPlatform:mlflow,lineagemedic.readmission_risk_model,PROD)",
+        "name": "readmission_risk_model",
+        "kind": "ml_model",
+        "state": "affected",
+        "hops_from_source": 1,
+        "rationale": "Consumes failing data 1 lineage hop(s) downstream of a dataset that failed a quality check."
+      },
+      {
+        "urn": "urn:li:mlModelDeployment:(urn:li:dataPlatform:sagemaker,lineagemedic.production_readmission_endpoint,PROD)",
+        "name": "production_readmission_endpoint",
+        "kind": "endpoint",
+        "state": "affected",
+        "hops_from_source": 2,
+        "rationale": "Consumes failing data 2 lineage hop(s) downstream of a dataset that failed a quality check."
+      },
+      {
+        "urn": "urn:li:dataset:(urn:li:dataPlatform:sqlite,lineagemedic.raw_billing,PROD)",
+        "name": "raw_billing",
+        "kind": "dataset",
+        "state": "unaffected",
+        "hops_from_source": null,
+        "rationale": "No lineage path from any failing dataset reaches this asset. Owned independently by Revenue Cycle Team; it must not be quarantined."
+      },
+      {
+        "urn": "urn:li:dataset:(urn:li:dataPlatform:sqlite,lineagemedic.billing_summary,PROD)",
+        "name": "billing_summary",
+        "kind": "dataset",
+        "state": "unaffected",
+        "hops_from_source": null,
+        "rationale": "No lineage path from any failing dataset reaches this asset. Owned independently by Revenue Cycle Team; it must not be quarantined."
+      }
+    ],
+    "affected_count": 5,
+    "unaffected_count": 2,
+    "production_endpoints_affected": [
+      "urn:li:mlModelDeployment:(urn:li:dataPlatform:sagemaker,lineagemedic.production_readmission_endpoint,PROD)"
+    ],
+    "ml_models_affected": [
+      "urn:li:mlModel:(urn:li:dataPlatform:mlflow,lineagemedic.readmission_risk_model,PROD)"
+    ]
+  },
+  "root_causes": [
+    {
+      "summary": "Defect originates in raw_patients in column(s) admission_date, age",
+      "suspected_urn": "urn:li:dataset:(urn:li:dataPlatform:sqlite,lineagemedic.raw_patients,PROD)",
+      "confidence": 0.76,
+      "reasoning": "raw_patients failed 2 check(s) in column(s) admission_date, age, and none of its upstream assets failed any check. The defect therefore originates here rather than being inherited.",
+      "supporting_evidence": [
+        "age-range: observed 0.074 against threshold 0.01 (37/500 rows)",
+        "admission-null-rate: observed 0.044 against threshold 0.02 (22/500 rows)"
+      ]
+    },
+    {
+      "summary": "staging_patients inherits a defect from raw_patients",
+      "suspected_urn": "urn:li:dataset:(urn:li:dataPlatform:sqlite,lineagemedic.staging_patients,PROD)",
+      "confidence": 0.51,
+      "reasoning": "staging_patients failed 2 check(s) in column(s) age, last_refreshed_at, but its upstream raw_patients failed as well. This is most likely propagation of an upstream defect rather than a new fault.",
+      "supporting_evidence": [
+        "age-range-propagated: observed 0.07740585774058577 against threshold 0.01 (37/478 rows)",
+        "staging-freshness: observed 52.0 against threshold 24.0 (0/478 rows)"
+      ]
+    },
+    {
+      "summary": "patient_features inherits a defect from staging_patients",
+      "suspected_urn": "urn:li:dataset:(urn:li:dataPlatform:feast,lineagemedic.patient_features,PROD)",
+      "confidence": 0.45,
+      "reasoning": "patient_features failed 1 check(s) in column(s) age_bucket, but its upstream staging_patients failed as well. This is most likely propagation of an upstream defect rather than a new fault.",
+      "supporting_evidence": [
+        "feature-unknown-bucket: observed 0.07740585774058577 against threshold 0.01 (37/478 rows)"
+      ]
+    }
+  ],
+  "remediation": [
+    {
+      "action_id": "add-validation-age-range",
+      "title": "Add a validation assertion on raw_patients.age",
+      "description": "Register a data-quality assertion enforcing 'raw_patients.age must fall within a plausible human range (0-130).' at ingestion time. Measured 37 violating row(s) out of 500. This stops new bad values entering the pipeline; it does not alter existing rows.",
+      "risk": "safe",
+      "target_urn": "urn:li:dataset:(urn:li:dataPlatform:sqlite,lineagemedic.raw_patients,PROD)",
+      "reversible": true,
+      "rollback": "Remove the assertion 'age-range' from the dataset.",
+      "requires_approval": false
+    },
+    {
+      "action_id": "add-validation-admission-null-rate",
+      "title": "Add a validation assertion on raw_patients.admission_date",
+      "description": "Register a data-quality assertion enforcing 'raw_patients.admission_date is required by the feature pipeline.' at ingestion time. Measured 22 violating row(s) out of 500. This stops new bad values entering the pipeline; it does not alter existing rows.",
+      "risk": "safe",
+      "target_urn": "urn:li:dataset:(urn:li:dataPlatform:sqlite,lineagemedic.raw_patients,PROD)",
+      "reversible": true,
+      "rollback": "Remove the assertion 'admission-null-rate' from the dataset.",
+      "requires_approval": false
+    },
+    {
+      "action_id": "pin-endpoint-production_readmission_endpoint",
+      "title": "Pin production_readmission_endpoint to the last known-good feature snapshot",
+      "description": "production_readmission_endpoint is serving predictions computed from degraded features. Pin it to the most recent feature snapshot taken before the defect window so it keeps serving valid scores while the upstream fix lands. Traffic is not interrupted.",
+      "risk": "reversible",
+      "target_urn": "urn:li:mlModelDeployment:(urn:li:dataPlatform:sagemaker,lineagemedic.production_readmission_endpoint,PROD)",
+      "reversible": true,
+      "rollback": "Unpin production_readmission_endpoint and resume live feature computation once the upstream validation assertion reports clean.",
+      "requires_approval": true
+    },
+    {
+      "action_id": "backfill-patient_features",
+      "title": "Backfill patient_features after the upstream fix",
+      "description": "Recompute patient_features for the affected window once raw_patients is validated, so downstream consumers see corrected values rather than the fallback bucket.",
+      "risk": "reversible",
+      "target_urn": "urn:li:dataset:(urn:li:dataPlatform:feast,lineagemedic.patient_features,PROD)",
+      "reversible": true,
+      "rollback": "Restore patient_features from the pre-backfill snapshot; the backfill writes a new partition rather than overwriting in place.",
+      "requires_approval": true
+    },
+    {
+      "action_id": "notify-owner",
+      "title": "Notify Data Platform Team",
+      "description": "Data Platform Team is the recorded technical owner of raw_patients in DataHub. Send them the incident summary, the failing check results, and the blast-radius assessment.",
+      "risk": "safe",
+      "target_urn": "urn:li:dataset:(urn:li:dataPlatform:sqlite,lineagemedic.raw_patients,PROD)",
+      "reversible": true,
+      "rollback": null,
+      "requires_approval": false
+    }
+  ],
+  "safety": {
+    "approved_actions": [
+      "add-validation-age-range",
+      "add-validation-admission-null-rate",
+      "pin-endpoint-production_readmission_endpoint",
+      "backfill-patient_features",
+      "notify-owner"
+    ],
+    "blocked_actions": [],
+    "requires_human_approval": true,
+    "blocking_reasons": {},
+    "notes": [
+      "2 action(s) change serving or storage state and are held at the approval gate: pin-endpoint-production_readmission_endpoint, backfill-patient_features.",
+      "2 cleared asset(s) are protected from modification by this incident response."
+    ]
+  },
+  "approval_state": "pending",
+  "writeback": null,
+  "evidence": [
+    {
+      "label": "Quality check age-range",
+      "detail": "[FAIL] raw_patients.age must fall within a plausible human range (0-130). Observed 0.074 against threshold 0.01 (lte); 37 of 500 row(s) violating. Samples: -7, -7, -7, -7, -7.",
+      "agent": "quality",
+      "source": "fixture",
+      "references": [
+        "urn:li:dataset:(urn:li:dataPlatform:sqlite,lineagemedic.raw_patients,PROD)"
+      ],
+      "observed_at": "2026-07-28T12:00:00+00:00"
+    },
+    {
+      "label": "Quality check admission-null-rate",
+      "detail": "[FAIL] raw_patients.admission_date is required by the feature pipeline. Observed 0.044 against threshold 0.02 (lte); 22 of 500 row(s) violating. Samples: NULL.",
+      "agent": "quality",
+      "source": "fixture",
+      "references": [
+        "urn:li:dataset:(urn:li:dataPlatform:sqlite,lineagemedic.raw_patients,PROD)"
+      ],
+      "observed_at": "2026-07-28T12:00:00+00:00"
+    },
+    {
+      "label": "Quality check age-range-propagated",
+      "detail": "[FAIL] staging_patients.age must be validated before feature computation. Observed 0.07740585774058577 against threshold 0.01 (lte); 37 of 478 row(s) violating. Samples: -7, -7, -7, -7, -7.",
+      "agent": "quality",
+      "source": "fixture",
+      "references": [
+        "urn:li:dataset:(urn:li:dataPlatform:sqlite,lineagemedic.staging_patients,PROD)"
+      ],
+      "observed_at": "2026-07-28T12:00:00+00:00"
+    },
+    {
+      "label": "Quality check staging-freshness",
+      "detail": "[FAIL] staging_patients must refresh at least every 24 hours. Observed 52.0 against threshold 24.0 (lte); 0 of 478 row(s) violating. Samples: 2026-07-26T08:00:00+00:00.",
+      "agent": "quality",
+      "source": "fixture",
+      "references": [
+        "urn:li:dataset:(urn:li:dataPlatform:sqlite,lineagemedic.staging_patients,PROD)"
+      ],
+      "observed_at": "2026-07-28T12:00:00+00:00"
+    },
+    {
+      "label": "Quality check feature-unknown-bucket",
+      "detail": "[FAIL] patient_features.age_bucket should rarely be 'unknown'; a high rate means invalid ages reached the model. Observed 0.07740585774058577 against threshold 0.01 (lte); 37 of 478 row(s) violating. Samples: unknown, unknown, unknown, unknown, unknown.",
+      "agent": "quality",
+      "source": "fixture",
+      "references": [
+        "urn:li:dataset:(urn:li:dataPlatform:feast,lineagemedic.patient_features,PROD)"
+      ],
+      "observed_at": "2026-07-28T12:00:00+00:00"
+    },
+    {
+      "label": "DataHub lineage retrieved",
+      "detail": "Traversed lineage from raw_patients and resolved 7 connected assets across 4 platforms.",
+      "agent": "context",
+      "source": "fixture",
+      "references": [
+        "urn:li:dataset:(urn:li:dataPlatform:sqlite,lineagemedic.raw_patients,PROD)",
+        "urn:li:dataset:(urn:li:dataPlatform:sqlite,lineagemedic.staging_patients,PROD)",
+        "urn:li:dataset:(urn:li:dataPlatform:feast,lineagemedic.patient_features,PROD)",
+        "urn:li:mlModel:(urn:li:dataPlatform:mlflow,lineagemedic.readmission_risk_model,PROD)",
+        "urn:li:mlModelDeployment:(urn:li:dataPlatform:sagemaker,lineagemedic.production_readmission_endpoint,PROD)",
+        "urn:li:dataset:(urn:li:dataPlatform:sqlite,lineagemedic.raw_billing,PROD)",
+        "urn:li:dataset:(urn:li:dataPlatform:sqlite,lineagemedic.billing_summary,PROD)"
+      ],
+      "observed_at": "2026-07-28T12:00:00+00:00"
+    },
+    {
+      "label": "Ownership resolved",
+      "detail": "Owning teams on the affected graph: Clinical Analytics, Data Platform Team, Health Data Stewards, ML Platform Team, Revenue Cycle Team.",
+      "agent": "context",
+      "source": "fixture",
+      "references": [
+        "urn:li:corpGroup:data-platform",
+        "urn:li:corpGroup:health-data-stewards",
+        "urn:li:corpGroup:data-platform",
+        "urn:li:corpGroup:ml-platform",
+        "urn:li:corpGroup:clinical-analytics",
+        "urn:li:corpGroup:ml-platform",
+        "urn:li:corpGroup:clinical-analytics",
+        "urn:li:corpGroup:ml-platform",
+        "urn:li:corpGroup:revenue-cycle",
+        "urn:li:corpGroup:revenue-cycle"
+      ],
+      "observed_at": "2026-07-28T12:00:00+00:00"
+    },
+    {
+      "label": "Context provenance",
+      "detail": "Metadata was served from committed fixtures, not from a live DataHub instance. Asset URNs, schemas, and lineage edges mirror the graph the ingestion scripts create, but nothing was read over the network.",
+      "agent": "context",
+      "source": "fixture",
+      "references": [],
+      "observed_at": "2026-07-28T12:00:00+00:00"
+    },
+    {
+      "label": "Blast radius computed",
+      "detail": "5 asset(s) lie downstream of failing data; 2 asset(s) were examined and cleared.",
+      "agent": "impact",
+      "source": "fixture",
+      "references": [
+        "urn:li:dataset:(urn:li:dataPlatform:sqlite,lineagemedic.raw_patients,PROD)",
+        "urn:li:dataset:(urn:li:dataPlatform:sqlite,lineagemedic.staging_patients,PROD)",
+        "urn:li:dataset:(urn:li:dataPlatform:feast,lineagemedic.patient_features,PROD)",
+        "urn:li:mlModel:(urn:li:dataPlatform:mlflow,lineagemedic.readmission_risk_model,PROD)",
+        "urn:li:mlModelDeployment:(urn:li:dataPlatform:sagemaker,lineagemedic.production_readmission_endpoint,PROD)"
+      ],
+      "observed_at": "2026-07-28T12:00:00+00:00"
+    },
+    {
+      "label": "Production serving affected",
+      "detail": "1 live inference endpoint(s) consume the degraded feature path and are serving predictions from it now.",
+      "agent": "impact",
+      "source": "fixture",
+      "references": [
+        "urn:li:mlModelDeployment:(urn:li:dataPlatform:sagemaker,lineagemedic.production_readmission_endpoint,PROD)"
+      ],
+      "observed_at": "2026-07-28T12:00:00+00:00"
+    },
+    {
+      "label": "Selective containment",
+      "detail": "Explicitly cleared: raw_billing, billing_summary. No lineage path connects these to any failing dataset, so they stay in service.",
+      "agent": "impact",
+      "source": "fixture",
+      "references": [
+        "urn:li:dataset:(urn:li:dataPlatform:sqlite,lineagemedic.raw_billing,PROD)",
+        "urn:li:dataset:(urn:li:dataPlatform:sqlite,lineagemedic.billing_summary,PROD)"
+      ],
+      "observed_at": "2026-07-28T12:00:00+00:00"
+    },
+    {
+      "label": "Most likely root cause",
+      "detail": "Defect originates in raw_patients in column(s) admission_date, age (confidence 76%). raw_patients failed 2 check(s) in column(s) admission_date, age, and none of its upstream assets failed any check. The defect therefore originates here rather than being inherited.",
+      "agent": "root_cause",
+      "source": "fixture",
+      "references": [
+        "urn:li:dataset:(urn:li:dataPlatform:sqlite,lineagemedic.raw_patients,PROD)"
+      ],
+      "observed_at": "2026-07-28T12:00:00+00:00"
+    },
+    {
+      "label": "Observed offending values",
+      "detail": "Sample values violating age-range: -7, -7, -7, -7, -7.",
+      "agent": "root_cause",
+      "source": "fixture",
+      "references": [
+        "urn:li:dataset:(urn:li:dataPlatform:sqlite,lineagemedic.raw_patients,PROD)"
+      ],
+      "observed_at": "2026-07-28T12:00:00+00:00"
+    },
+    {
+      "label": "Alternative hypotheses considered",
+      "detail": "staging_patients inherits a defect from raw_patients (51%); patient_features inherits a defect from staging_patients (45%)",
+      "agent": "root_cause",
+      "source": "fixture",
+      "references": [
+        "urn:li:dataset:(urn:li:dataPlatform:sqlite,lineagemedic.staging_patients,PROD)",
+        "urn:li:dataset:(urn:li:dataPlatform:feast,lineagemedic.patient_features,PROD)"
+      ],
+      "observed_at": "2026-07-28T12:00:00+00:00"
+    },
+    {
+      "label": "Remediation plan assembled",
+      "detail": "5 action(s) proposed: 2 require human approval, 3 are metadata-only. Every action declares a rollback.",
+      "agent": "remediation",
+      "source": "fixture",
+      "references": [
+        "urn:li:dataset:(urn:li:dataPlatform:sqlite,lineagemedic.raw_patients,PROD)",
+        "urn:li:dataset:(urn:li:dataPlatform:sqlite,lineagemedic.raw_patients,PROD)",
+        "urn:li:mlModelDeployment:(urn:li:dataPlatform:sagemaker,lineagemedic.production_readmission_endpoint,PROD)",
+        "urn:li:dataset:(urn:li:dataPlatform:feast,lineagemedic.patient_features,PROD)",
+        "urn:li:dataset:(urn:li:dataPlatform:sqlite,lineagemedic.raw_patients,PROD)"
+      ],
+      "observed_at": "2026-07-28T12:00:00+00:00"
+    },
+    {
+      "label": "Safety review completed",
+      "detail": "5 action(s) cleared policy, 0 blocked. Human approval is required before any state-changing action runs.",
+      "agent": "safety",
+      "source": "fixture",
+      "references": [],
+      "observed_at": "2026-07-28T12:00:00+00:00"
+    }
+  ],
+  "steps": [
+    {
+      "agent": "quality",
+      "title": "Scanned healthcare data for planted defects",
+      "summary": "Executed 5 check(s) against the warehouse; 5 failed.",
+      "started_at": "2026-07-28T12:00:00+00:00",
+      "duration_ms": 0,
+      "ok": true,
+      "evidence": [
+        {
+          "label": "Quality check age-range",
+          "detail": "[FAIL] raw_patients.age must fall within a plausible human range (0-130). Observed 0.074 against threshold 0.01 (lte); 37 of 500 row(s) violating. Samples: -7, -7, -7, -7, -7.",
+          "agent": "quality",
+          "source": "fixture",
+          "references": [
+            "urn:li:dataset:(urn:li:dataPlatform:sqlite,lineagemedic.raw_patients,PROD)"
+          ],
+          "observed_at": "2026-07-28T12:00:00+00:00"
+        },
+        {
+          "label": "Quality check admission-null-rate",
+          "detail": "[FAIL] raw_patients.admission_date is required by the feature pipeline. Observed 0.044 against threshold 0.02 (lte); 22 of 500 row(s) violating. Samples: NULL.",
+          "agent": "quality",
+          "source": "fixture",
+          "references": [
+            "urn:li:dataset:(urn:li:dataPlatform:sqlite,lineagemedic.raw_patients,PROD)"
+          ],
+          "observed_at": "2026-07-28T12:00:00+00:00"
+        },
+        {
+          "label": "Quality check age-range-propagated",
+          "detail": "[FAIL] staging_patients.age must be validated before feature computation. Observed 0.07740585774058577 against threshold 0.01 (lte); 37 of 478 row(s) violating. Samples: -7, -7, -7, -7, -7.",
+          "agent": "quality",
+          "source": "fixture",
+          "references": [
+            "urn:li:dataset:(urn:li:dataPlatform:sqlite,lineagemedic.staging_patients,PROD)"
+          ],
+          "observed_at": "2026-07-28T12:00:00+00:00"
+        },
+        {
+          "label": "Quality check staging-freshness",
+          "detail": "[FAIL] staging_patients must refresh at least every 24 hours. Observed 52.0 against threshold 24.0 (lte); 0 of 478 row(s) violating. Samples: 2026-07-26T08:00:00+00:00.",
+          "agent": "quality",
+          "source": "fixture",
+          "references": [
+            "urn:li:dataset:(urn:li:dataPlatform:sqlite,lineagemedic.staging_patients,PROD)"
+          ],
+          "observed_at": "2026-07-28T12:00:00+00:00"
+        },
+        {
+          "label": "Quality check feature-unknown-bucket",
+          "detail": "[FAIL] patient_features.age_bucket should rarely be 'unknown'; a high rate means invalid ages reached the model. Observed 0.07740585774058577 against threshold 0.01 (lte); 37 of 478 row(s) violating. Samples: unknown, unknown, unknown, unknown, unknown.",
+          "agent": "quality",
+          "source": "fixture",
+          "references": [
+            "urn:li:dataset:(urn:li:dataPlatform:feast,lineagemedic.patient_features,PROD)"
+          ],
+          "observed_at": "2026-07-28T12:00:00+00:00"
+        }
+      ],
+      "mcp_calls": []
+    },
+    {
+      "agent": "context",
+      "title": "Retrieved DataHub schema, ownership, and lineage",
+      "summary": "Resolved 7 asset(s) using 3 MCP tool call(s).",
+      "started_at": "2026-07-28T12:00:00+00:00",
+      "duration_ms": 0,
+      "ok": true,
+      "evidence": [
+        {
+          "label": "DataHub lineage retrieved",
+          "detail": "Traversed lineage from raw_patients and resolved 7 connected assets across 4 platforms.",
+          "agent": "context",
+          "source": "fixture",
+          "references": [
+            "urn:li:dataset:(urn:li:dataPlatform:sqlite,lineagemedic.raw_patients,PROD)",
+            "urn:li:dataset:(urn:li:dataPlatform:sqlite,lineagemedic.staging_patients,PROD)",
+            "urn:li:dataset:(urn:li:dataPlatform:feast,lineagemedic.patient_features,PROD)",
+            "urn:li:mlModel:(urn:li:dataPlatform:mlflow,lineagemedic.readmission_risk_model,PROD)",
+            "urn:li:mlModelDeployment:(urn:li:dataPlatform:sagemaker,lineagemedic.production_readmission_endpoint,PROD)",
+            "urn:li:dataset:(urn:li:dataPlatform:sqlite,lineagemedic.raw_billing,PROD)",
+            "urn:li:dataset:(urn:li:dataPlatform:sqlite,lineagemedic.billing_summary,PROD)"
+          ],
+          "observed_at": "2026-07-28T12:00:00+00:00"
+        },
+        {
+          "label": "Ownership resolved",
+          "detail": "Owning teams on the affected graph: Clinical Analytics, Data Platform Team, Health Data Stewards, ML Platform Team, Revenue Cycle Team.",
+          "agent": "context",
+          "source": "fixture",
+          "references": [
+            "urn:li:corpGroup:data-platform",
+            "urn:li:corpGroup:health-data-stewards",
+            "urn:li:corpGroup:data-platform",
+            "urn:li:corpGroup:ml-platform",
+            "urn:li:corpGroup:clinical-analytics",
+            "urn:li:corpGroup:ml-platform",
+            "urn:li:corpGroup:clinical-analytics",
+            "urn:li:corpGroup:ml-platform",
+            "urn:li:corpGroup:revenue-cycle",
+            "urn:li:corpGroup:revenue-cycle"
+          ],
+          "observed_at": "2026-07-28T12:00:00+00:00"
+        },
+        {
+          "label": "Context provenance",
+          "detail": "Metadata was served from committed fixtures, not from a live DataHub instance. Asset URNs, schemas, and lineage edges mirror the graph the ingestion scripts create, but nothing was read over the network.",
+          "agent": "context",
+          "source": "fixture",
+          "references": [],
+          "observed_at": "2026-07-28T12:00:00+00:00"
+        }
+      ],
+      "mcp_calls": [
+        {
+          "tool": "get_lineage",
+          "arguments": {
+            "urn": "urn:li:dataset:(urn:li:dataPlatform:sqlite,lineagemedic.raw_patients,PROD)",
+            "upstream_depth": 5,
+            "downstream_depth": 5
+          },
+          "ok": true,
+          "returned_urns": [
+            "urn:li:dataset:(urn:li:dataPlatform:sqlite,lineagemedic.raw_patients,PROD)",
+            "urn:li:dataset:(urn:li:dataPlatform:sqlite,lineagemedic.staging_patients,PROD)",
+            "urn:li:dataset:(urn:li:dataPlatform:feast,lineagemedic.patient_features,PROD)",
+            "urn:li:mlModel:(urn:li:dataPlatform:mlflow,lineagemedic.readmission_risk_model,PROD)",
+            "urn:li:mlModelDeployment:(urn:li:dataPlatform:sagemaker,lineagemedic.production_readmission_endpoint,PROD)"
+          ],
+          "error": null,
+          "duration_ms": 0,
+          "source": "fixture",
+          "called_at": "2026-07-28T12:00:00+00:00"
+        },
+        {
+          "tool": "get_lineage",
+          "arguments": {
+            "urn": "urn:li:dataset:(urn:li:dataPlatform:sqlite,lineagemedic.raw_billing,PROD)",
+            "upstream_depth": 5,
+            "downstream_depth": 5
+          },
+          "ok": true,
+          "returned_urns": [
+            "urn:li:dataset:(urn:li:dataPlatform:sqlite,lineagemedic.raw_billing,PROD)",
+            "urn:li:dataset:(urn:li:dataPlatform:sqlite,lineagemedic.billing_summary,PROD)"
+          ],
+          "error": null,
+          "duration_ms": 0,
+          "source": "fixture",
+          "called_at": "2026-07-28T12:00:00+00:00"
+        },
+        {
+          "tool": "get_lineage",
+          "arguments": {
+            "urn": "urn:li:dataset:(urn:li:dataPlatform:sqlite,lineagemedic.billing_summary,PROD)",
+            "upstream_depth": 5,
+            "downstream_depth": 5
+          },
+          "ok": true,
+          "returned_urns": [
+            "urn:li:dataset:(urn:li:dataPlatform:sqlite,lineagemedic.raw_billing,PROD)",
+            "urn:li:dataset:(urn:li:dataPlatform:sqlite,lineagemedic.billing_summary,PROD)"
+          ],
+          "error": null,
+          "duration_ms": 0,
+          "source": "fixture",
+          "called_at": "2026-07-28T12:00:00+00:00"
+        }
+      ]
+    },
+    {
+      "agent": "impact",
+      "title": "Calculated downstream blast radius",
+      "summary": "5 asset(s) affected, 2 cleared and left in service.",
+      "started_at": "2026-07-28T12:00:00+00:00",
+      "duration_ms": 0,
+      "ok": true,
+      "evidence": [
+        {
+          "label": "Blast radius computed",
+          "detail": "5 asset(s) lie downstream of failing data; 2 asset(s) were examined and cleared.",
+          "agent": "impact",
+          "source": "fixture",
+          "references": [
+            "urn:li:dataset:(urn:li:dataPlatform:sqlite,lineagemedic.raw_patients,PROD)",
+            "urn:li:dataset:(urn:li:dataPlatform:sqlite,lineagemedic.staging_patients,PROD)",
+            "urn:li:dataset:(urn:li:dataPlatform:feast,lineagemedic.patient_features,PROD)",
+            "urn:li:mlModel:(urn:li:dataPlatform:mlflow,lineagemedic.readmission_risk_model,PROD)",
+            "urn:li:mlModelDeployment:(urn:li:dataPlatform:sagemaker,lineagemedic.production_readmission_endpoint,PROD)"
+          ],
+          "observed_at": "2026-07-28T12:00:00+00:00"
+        },
+        {
+          "label": "Production serving affected",
+          "detail": "1 live inference endpoint(s) consume the degraded feature path and are serving predictions from it now.",
+          "agent": "impact",
+          "source": "fixture",
+          "references": [
+            "urn:li:mlModelDeployment:(urn:li:dataPlatform:sagemaker,lineagemedic.production_readmission_endpoint,PROD)"
+          ],
+          "observed_at": "2026-07-28T12:00:00+00:00"
+        },
+        {
+          "label": "Selective containment",
+          "detail": "Explicitly cleared: raw_billing, billing_summary. No lineage path connects these to any failing dataset, so they stay in service.",
+          "agent": "impact",
+          "source": "fixture",
+          "references": [
+            "urn:li:dataset:(urn:li:dataPlatform:sqlite,lineagemedic.raw_billing,PROD)",
+            "urn:li:dataset:(urn:li:dataPlatform:sqlite,lineagemedic.billing_summary,PROD)"
+          ],
+          "observed_at": "2026-07-28T12:00:00+00:00"
+        }
+      ],
+      "mcp_calls": []
+    },
+    {
+      "agent": "root_cause",
+      "title": "Ranked probable root causes",
+      "summary": "3 hypothesis/es ranked; top confidence 76%.",
+      "started_at": "2026-07-28T12:00:00+00:00",
+      "duration_ms": 0,
+      "ok": true,
+      "evidence": [
+        {
+          "label": "Most likely root cause",
+          "detail": "Defect originates in raw_patients in column(s) admission_date, age (confidence 76%). raw_patients failed 2 check(s) in column(s) admission_date, age, and none of its upstream assets failed any check. The defect therefore originates here rather than being inherited.",
+          "agent": "root_cause",
+          "source": "fixture",
+          "references": [
+            "urn:li:dataset:(urn:li:dataPlatform:sqlite,lineagemedic.raw_patients,PROD)"
+          ],
+          "observed_at": "2026-07-28T12:00:00+00:00"
+        },
+        {
+          "label": "Observed offending values",
+          "detail": "Sample values violating age-range: -7, -7, -7, -7, -7.",
+          "agent": "root_cause",
+          "source": "fixture",
+          "references": [
+            "urn:li:dataset:(urn:li:dataPlatform:sqlite,lineagemedic.raw_patients,PROD)"
+          ],
+          "observed_at": "2026-07-28T12:00:00+00:00"
+        },
+        {
+          "label": "Alternative hypotheses considered",
+          "detail": "staging_patients inherits a defect from raw_patients (51%); patient_features inherits a defect from staging_patients (45%)",
+          "agent": "root_cause",
+          "source": "fixture",
+          "references": [
+            "urn:li:dataset:(urn:li:dataPlatform:sqlite,lineagemedic.staging_patients,PROD)",
+            "urn:li:dataset:(urn:li:dataPlatform:feast,lineagemedic.patient_features,PROD)"
+          ],
+          "observed_at": "2026-07-28T12:00:00+00:00"
+        }
+      ],
+      "mcp_calls": []
+    },
+    {
+      "agent": "remediation",
+      "title": "Proposed corrective actions",
+      "summary": "5 reversible action(s) proposed.",
+      "started_at": "2026-07-28T12:00:00+00:00",
+      "duration_ms": 0,
+      "ok": true,
+      "evidence": [
+        {
+          "label": "Remediation plan assembled",
+          "detail": "5 action(s) proposed: 2 require human approval, 3 are metadata-only. Every action declares a rollback.",
+          "agent": "remediation",
+          "source": "fixture",
+          "references": [
+            "urn:li:dataset:(urn:li:dataPlatform:sqlite,lineagemedic.raw_patients,PROD)",
+            "urn:li:dataset:(urn:li:dataPlatform:sqlite,lineagemedic.raw_patients,PROD)",
+            "urn:li:mlModelDeployment:(urn:li:dataPlatform:sagemaker,lineagemedic.production_readmission_endpoint,PROD)",
+            "urn:li:dataset:(urn:li:dataPlatform:feast,lineagemedic.patient_features,PROD)",
+            "urn:li:dataset:(urn:li:dataPlatform:sqlite,lineagemedic.raw_patients,PROD)"
+          ],
+          "observed_at": "2026-07-28T12:00:00+00:00"
+        }
+      ],
+      "mcp_calls": []
+    },
+    {
+      "agent": "safety",
+      "title": "Applied safety policy",
+      "summary": "5 allowed, 0 blocked; human approval required.",
+      "started_at": "2026-07-28T12:00:00+00:00",
+      "duration_ms": 0,
+      "ok": true,
+      "evidence": [
+        {
+          "label": "Safety review completed",
+          "detail": "5 action(s) cleared policy, 0 blocked. Human approval is required before any state-changing action runs.",
+          "agent": "safety",
+          "source": "fixture",
+          "references": [],
+          "observed_at": "2026-07-28T12:00:00+00:00"
+        }
+      ],
+      "mcp_calls": []
+    }
+  ],
+  "mcp_calls": [
+    {
+      "tool": "get_lineage",
+      "arguments": {
+        "urn": "urn:li:dataset:(urn:li:dataPlatform:sqlite,lineagemedic.raw_patients,PROD)",
+        "upstream_depth": 5,
+        "downstream_depth": 5
+      },
+      "ok": true,
+      "returned_urns": [
+        "urn:li:dataset:(urn:li:dataPlatform:sqlite,lineagemedic.raw_patients,PROD)",
+        "urn:li:dataset:(urn:li:dataPlatform:sqlite,lineagemedic.staging_patients,PROD)",
+        "urn:li:dataset:(urn:li:dataPlatform:feast,lineagemedic.patient_features,PROD)",
+        "urn:li:mlModel:(urn:li:dataPlatform:mlflow,lineagemedic.readmission_risk_model,PROD)",
+        "urn:li:mlModelDeployment:(urn:li:dataPlatform:sagemaker,lineagemedic.production_readmission_endpoint,PROD)"
+      ],
+      "error": null,
+      "duration_ms": 0,
+      "source": "fixture",
+      "called_at": "2026-07-28T12:00:00+00:00"
+    },
+    {
+      "tool": "get_lineage",
+      "arguments": {
+        "urn": "urn:li:dataset:(urn:li:dataPlatform:sqlite,lineagemedic.raw_billing,PROD)",
+        "upstream_depth": 5,
+        "downstream_depth": 5
+      },
+      "ok": true,
+      "returned_urns": [
+        "urn:li:dataset:(urn:li:dataPlatform:sqlite,lineagemedic.raw_billing,PROD)",
+        "urn:li:dataset:(urn:li:dataPlatform:sqlite,lineagemedic.billing_summary,PROD)"
+      ],
+      "error": null,
+      "duration_ms": 0,
+      "source": "fixture",
+      "called_at": "2026-07-28T12:00:00+00:00"
+    },
+    {
+      "tool": "get_lineage",
+      "arguments": {
+        "urn": "urn:li:dataset:(urn:li:dataPlatform:sqlite,lineagemedic.billing_summary,PROD)",
+        "upstream_depth": 5,
+        "downstream_depth": 5
+      },
+      "ok": true,
+      "returned_urns": [
+        "urn:li:dataset:(urn:li:dataPlatform:sqlite,lineagemedic.raw_billing,PROD)",
+        "urn:li:dataset:(urn:li:dataPlatform:sqlite,lineagemedic.billing_summary,PROD)"
+      ],
+      "error": null,
+      "duration_ms": 0,
+      "source": "fixture",
+      "called_at": "2026-07-28T12:00:00+00:00"
+    }
+  ],
+  "context_source": "fixture",
+  "fixture_mode_notice": "Demo Fixture Mode - DataHub integration not connected.",
+  "narration": null,
+  "narration_provider": "deterministic",
+  "created_at": "2026-07-28T12:00:00+00:00"
+}
