@@ -217,24 +217,34 @@ def test_root_banner_redacts_configuration(client: TestClient) -> None:
 def test_live_mode_refuses_rather_than_falling_back_to_fixtures(
     client: TestClient, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """Live mode without live adapters must fail loudly, not degrade quietly.
+    """Live mode with an unreachable DataHub must fail loudly, not degrade quietly.
 
     Silently serving fixture data while configured for live would be the worst
     possible failure for this project: the operator would believe they were
-    looking at DataHub. 501 says the capability does not exist in this build.
+    looking at DataHub.
+
+    Before the live adapters existed this returned 501 ("not implemented"). Now
+    that they do, an unreachable DataHub is a 503 - the capability exists, the
+    dependency is down. The guarantee under test is unchanged and is the reason
+    this test exists: **no fixture data is ever substituted in live mode.**
     """
     from lineagemedic_api import config
 
     monkeypatch.setenv("LINEAGEMEDIC_MODE", "live")
+    # Point at a port nothing is listening on, so the probe genuinely fails
+    # even when a DataHub happens to be running on this machine.
+    monkeypatch.setenv("DATAHUB_GMS_URL", "http://127.0.0.1:9")
     config.reset_settings()
 
     response = client.post("/diagnose", json={"scenario_id": "critical-age-corruption"})
 
-    assert response.status_code == 501
+    assert response.status_code == 503
     detail = response.json()["detail"]
     assert "live" in detail.lower()
     # The message has to tell the operator how to get back to a working state.
     assert "fixture" in detail.lower()
+    # And it must not have leaked a diagnosis built from fixtures.
+    assert "incident_id" not in response.text
 
 
 def test_openapi_schema_is_generated(client: TestClient) -> None:

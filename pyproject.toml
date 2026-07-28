@@ -12,7 +12,7 @@ filterwarnings = [
 [tool.ruff]
 line-length = 100
 target-version = "py311"
-extend-exclude = [".venv", "node_modules", "apps/web"]
+extend-exclude = [".venv", ".venv-datahub", "node_modules", "apps/web"]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B", "SIM", "N", "RUF"]
@@ -40,7 +40,7 @@ disallow_untyped_defs = true
 no_implicit_optional = true
 check_untyped_defs = true
 mypy_path = "packages/lineagemedic/src:apps/api"
-exclude = ["\\.venv", "node_modules", "apps/web"]
+exclude = ["\\.venv", "\\.venv-datahub", "node_modules", "apps/web"]
 
 [[tool.mypy.overrides]]
 # Tests favour readability over exhaustive annotation; pytest fixture params

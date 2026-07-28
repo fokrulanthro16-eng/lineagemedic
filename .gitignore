@@ -4,6 +4,10 @@ __pycache__/
 *.egg-info/
 .venv/
 venv/
+# Isolated Python 3.11 environment for the DataHub CLI. Kept separate from
+# .venv so the DataHub SDK's pinned dependency tree cannot constrain the
+# application's own.
+.venv-datahub/
 .pytest_cache/
 .mypy_cache/
 .ruff_cache/

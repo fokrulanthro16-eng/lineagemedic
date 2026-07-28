@@ -24,7 +24,9 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 
-from lineagemedic.adapters.base import AdapterError
+from lineagemedic.adapters.base import AdapterError, MetadataPort, WritebackPort
+from lineagemedic.adapters.datahub_mcp import DataHubMetadataAdapter
+from lineagemedic.adapters.datahub_sdk import DataHubWritebackAdapter
 from lineagemedic.adapters.fixture import (
     FIXTURE_NOTICE,
     FixtureMetadataAdapter,
@@ -79,31 +81,83 @@ store = IncidentStore()
 # ---------------------------------------------------------------------------
 
 
+def build_metadata_adapter(cfg: Settings) -> MetadataPort:
+    """Pick the read-side adapter for the current mode.
+
+    In live mode the DataHub connection is probed before it is handed out. A
+    configured-but-unreachable DataHub returns 503 rather than falling back to
+    fixtures: a deployment that believes it is reading a live catalog when it is
+    not is precisely the failure this project exists to prevent.
+    """
+    if cfg.is_fixture_mode:
+        return FixtureMetadataAdapter(frontend_url=cfg.datahub_frontend_url)
+
+    adapter = DataHubMetadataAdapter(
+        gms_url=cfg.datahub_gms_url,
+        frontend_url=cfg.datahub_frontend_url,
+        token=cfg.datahub_token,
+        timeout_seconds=cfg.mcp_timeout_seconds,
+    )
+    reachable, detail = adapter.health()
+    if not reachable:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=(
+                f"LINEAGEMEDIC_MODE=live but DataHub is not reachable. {detail} "
+                "Start DataHub, or set LINEAGEMEDIC_MODE=fixture to run in Demo "
+                "Fixture Mode. Fixtures are never substituted silently in live mode."
+            ),
+        )
+    return adapter
+
+
+def build_writeback_adapter(cfg: Settings) -> WritebackPort:
+    """Pick the write-side adapter for the current mode."""
+    if cfg.is_fixture_mode:
+        return FixtureWritebackAdapter()
+    return DataHubWritebackAdapter(
+        gms_url=cfg.datahub_gms_url,
+        frontend_url=cfg.datahub_frontend_url,
+        token=cfg.datahub_token,
+        timeout_seconds=cfg.mcp_timeout_seconds,
+    )
+
+
+def status_adapter(cfg: Settings) -> MetadataPort:
+    """A read adapter for the status endpoints, which must never raise.
+
+    :func:`build_metadata_adapter` raises 503 when live mode cannot reach
+    DataHub, which is right for a diagnosis but wrong for a status probe - the
+    status endpoints exist precisely to report that DataHub is down. This
+    constructs the live adapter without health-gating it, so ``health()`` can
+    return the real reason.
+    """
+    if cfg.is_fixture_mode:
+        return FixtureMetadataAdapter(frontend_url=cfg.datahub_frontend_url)
+    return DataHubMetadataAdapter(
+        gms_url=cfg.datahub_gms_url,
+        frontend_url=cfg.datahub_frontend_url,
+        token=cfg.datahub_token,
+        timeout_seconds=cfg.mcp_timeout_seconds,
+    )
+
+
 def build_workflow(cfg: Settings | None = None) -> Workflow:
     """Assemble the workflow with the adapters the current mode calls for.
 
-    Live mode is not wired here yet: the live adapters land with the DataHub
-    environment. Rather than silently degrading to fixtures - which would let a
-    deployment believe it was reading DataHub when it was not - this raises.
+    This is the single switch point between fixture and live operation. The
+    workflow and all seven agents depend only on the two protocols, so nothing
+    below this function is aware of which backend is in play.
     """
     cfg = cfg or get_settings()
-    if not cfg.is_fixture_mode:
-        raise HTTPException(
-            status_code=status.HTTP_501_NOT_IMPLEMENTED,
-            detail=(
-                "LINEAGEMEDIC_MODE=live requires the DataHub MCP adapters, which are "
-                "not available in this build. Set LINEAGEMEDIC_MODE=fixture to run in "
-                "Demo Fixture Mode."
-            ),
-        )
     narrator = build_narrator(
         cfg.llm_provider,
         ollama_url=cfg.ollama_base_url,
         ollama_model=cfg.ollama_model,
     )
     return Workflow(
-        metadata=FixtureMetadataAdapter(frontend_url=cfg.datahub_frontend_url),
-        writeback=FixtureWritebackAdapter(),
+        metadata=build_metadata_adapter(cfg),
+        writeback=build_writeback_adapter(cfg),
         db_path=cfg.db_path,
         narrator=narrator.narrate,
     )
@@ -214,7 +268,7 @@ def health() -> HealthResponse:
 def datahub_status() -> DataHubStatusResponse:
     """Report DataHub connectivity truthfully, including when it is absent."""
     cfg = get_settings()
-    adapter = FixtureMetadataAdapter(frontend_url=cfg.datahub_frontend_url)
+    adapter = status_adapter(cfg)
     connected, detail = adapter.health()
     return DataHubStatusResponse(
         connected=connected,
@@ -230,7 +284,7 @@ def datahub_status() -> DataHubStatusResponse:
 def mcp_status() -> McpCapabilityResponse:
     """List MCP tools available, and the calls the last diagnosis made."""
     cfg = get_settings()
-    adapter = FixtureMetadataAdapter(frontend_url=cfg.datahub_frontend_url)
+    adapter = status_adapter(cfg)
     connected, detail = adapter.health()
     recent = store.list()
     return McpCapabilityResponse(
@@ -246,7 +300,7 @@ def mcp_status() -> McpCapabilityResponse:
 def integration_status() -> IntegrationStatus:
     """Consolidated status for the UI status bar."""
     cfg = get_settings()
-    adapter = FixtureMetadataAdapter(frontend_url=cfg.datahub_frontend_url)
+    adapter = status_adapter(cfg)
     datahub_ok, datahub_detail = adapter.health()
     narrator = build_narrator(
         cfg.llm_provider, ollama_url=cfg.ollama_base_url, ollama_model=cfg.ollama_model
@@ -257,7 +311,9 @@ def integration_status() -> IntegrationStatus:
         datahub_connected=datahub_ok,
         datahub_detail=datahub_detail,
         mcp_connected=datahub_ok,
-        mcp_detail=detail_for_mcp(datahub_ok, datahub_detail),
+        mcp_detail=detail_for_mcp(
+            datahub_ok, datahub_detail, fixture_mode=cfg.is_fixture_mode
+        ),
         llm_provider=narrator.provider_name,
         llm_available=llm_ok,
         llm_detail=llm_detail,
@@ -265,13 +321,25 @@ def integration_status() -> IntegrationStatus:
     )
 
 
-def detail_for_mcp(connected: bool, detail: str) -> str:
-    """Phrase the MCP status so fixture mode is unambiguous."""
+def detail_for_mcp(connected: bool, detail: str, *, fixture_mode: bool = True) -> str:
+    """Phrase the MCP status so the reason for a disconnection is unambiguous.
+
+    A disconnection means two different things in the two modes, and conflating
+    them would be a fabricated status. In fixture mode nothing is expected to be
+    connected and reads are genuinely served from fixtures. In live mode a
+    disconnection is a fault: no fixture substitution happens, and diagnosis
+    requests fail rather than returning fixture data.
+    """
     if connected:
         return detail
+    if fixture_mode:
+        return (
+            "No MCP server is connected. Metadata reads are served from committed "
+            "fixtures and are labelled as such on every response."
+        )
     return (
-        "No MCP server is connected. Metadata reads are served from committed "
-        "fixtures and are labelled as such on every response."
+        f"Live mode is configured but DataHub is not reachable. {detail} Diagnosis "
+        "requests will fail with 503; fixture data is never substituted in live mode."
     )
 
 

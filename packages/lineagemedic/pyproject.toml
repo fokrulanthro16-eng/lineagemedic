@@ -28,6 +28,12 @@ dev = [
   "ruff>=0.6",
   "mypy>=1.11",
 ]
+# The live writeback adapter only. The read adapter needs nothing beyond httpx,
+# and fixture mode needs neither, so this stays optional: a fixture-mode install
+# should not have to pull the DataHub SDK's full dependency tree.
+datahub = [
+  "acryl-datahub>=0.15,<0.16",
+]
 
 [tool.setuptools.packages.find]
 where = ["src"]
