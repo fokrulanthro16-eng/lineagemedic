@@ -86,6 +86,14 @@ _INGESTION_ACTOR = "urn:li:corpuser:datahub"
 URN_MODEL_PREDICTIONS = dataset_urn("model_predictions", PLATFORM_MLFLOW)
 URN_ENDPOINT_PREDICTIONS = dataset_urn("endpoint_predictions", PLATFORM_SAGEMAKER)
 
+#: The pipeline and its two jobs. Defined at module level because both
+#: :func:`_properties_aspect` and :func:`_ml_bridge_mcps` need them: the jobs
+#: carry the dataset-level chain, and the model names the same two jobs so that
+#: it is not stranded beside its own pipeline. See :func:`_ml_bridge_mcps`.
+URN_PIPELINE_FLOW = f"urn:li:dataFlow:({PLATFORM_MLFLOW},lineagemedic.readmission_pipeline,PROD)"
+URN_TRAIN_JOB = f"urn:li:dataJob:({URN_PIPELINE_FLOW},train_readmission_model)"
+URN_SERVE_JOB = f"urn:li:dataJob:({URN_PIPELINE_FLOW},serve_readmission_endpoint)"
+
 #: Maps the fixture's ownership vocabulary onto DataHub's ownership type enum.
 _OWNERSHIP_TYPE = {
     "TECHNICAL_OWNER": OwnershipTypeClass.TECHNICAL_OWNER,
@@ -195,6 +203,26 @@ def _properties_aspect(asset: Asset) -> object:
     The ML model's ``deployments`` field records the endpoint it serves. Note
     that this records the relationship but does *not* create a traversable
     lineage edge; see :func:`_ml_bridge_mcps` for why, and for what does.
+
+    ``trainingJobs`` and ``downstreamJobs`` are what place the model *inside*
+    its own pipeline rather than beside it. Without them the model page in
+    DataHub shows no upstream and no downstream at all: the dataset chain runs
+    around the model via the two bridge jobs, leaving ``readmission_risk_model``
+    an island carrying only owners, tags, and a description.
+
+    They are needed because ``mlModel`` cannot take an ``upstreamLineage``
+    aspect - GMS rejects it with HTTP 422, "Unknown aspect upstreamLineage for
+    entity mlModel", verified against the running v1.6.0 instance. These two
+    fields are DataHub's own way to express the same thing for a model, and
+    they are accepted, producing ``TrainedBy`` and ``UsedBy`` edges.
+
+    One caveat worth knowing, established by probing rather than assumed:
+    ``searchAcrossLineage`` does **not** follow ``TrainedBy``/``UsedBy``, so it
+    still reports zero hops from the model in both directions. The UI's lineage
+    tab uses the relationship-based ``entity.lineage`` resolver, which does
+    follow them, so the chain renders correctly in the browser. The adapter's
+    blast radius relies on the dataset-level ``DownstreamOf`` edges emitted by
+    :func:`_ml_bridge_mcps` and is unaffected either way.
     """
     if asset.kind is AssetKind.ML_MODEL:
         return MLModelPropertiesClass(
@@ -202,6 +230,8 @@ def _properties_aspect(asset: Asset) -> object:
             description=asset.description,
             customProperties={"managed_by": "lineagemedic"},
             deployments=list(asset.downstreams),
+            trainingJobs=[URN_TRAIN_JOB],
+            downstreamJobs=[URN_SERVE_JOB],
         )
     if asset.kind is AssetKind.ENDPOINT:
         return MLModelDeploymentPropertiesClass(
@@ -325,10 +355,16 @@ def _ml_bridge_mcps(graph: object) -> list[MetadataChangeProposalWrapper]:
     The ``mlModel`` and ``mlModelDeployment`` entities are still ingested, with
     their real descriptions, owners, and tags. They remain the catalog's record
     of the model and the endpoint; these jobs carry the reachability.
+
+    The model is additionally joined to these two jobs from its own side, via
+    ``trainingJobs``/``downstreamJobs`` on ``mlModelProperties`` - see
+    :func:`_properties_aspect`. Without that the model renders in the UI with no
+    lineage whatsoever, because the chain below routes around it rather than
+    through it.
     """
-    flow_urn = f"urn:li:dataFlow:({PLATFORM_MLFLOW},lineagemedic.readmission_pipeline,PROD)"
-    train_urn = f"urn:li:dataJob:({flow_urn},train_readmission_model)"
-    serve_urn = f"urn:li:dataJob:({flow_urn},serve_readmission_endpoint)"
+    flow_urn = URN_PIPELINE_FLOW
+    train_urn = URN_TRAIN_JOB
+    serve_urn = URN_SERVE_JOB
 
     return [
         # The datasets each job emits. These are the scores the model and the

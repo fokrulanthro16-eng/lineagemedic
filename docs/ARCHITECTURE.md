@@ -185,14 +185,24 @@ two, when an MCP server is actually running.
 
 ### What the live catalog forced
 
-Three constraints of DataHub v1.6.0 were established by probing the running
+Four constraints of DataHub v1.6.0 were established by probing the running
 instance, and each is documented with its evidence at the point it shaped the
 code:
 
-- **ML entities cannot participate in lineage.** `upstreamLineage` on `mlModel`
-  is rejected 422; `MLModelDeployment` is not in the GraphQL schema at all. The
-  chain is therefore bridged by `dataJob` entities and their output datasets.
-  See `_ml_bridge_mcps` in `scripts/ingest_lineage.py`.
+- **ML entities cannot carry dataset lineage.** `upstreamLineage` on `mlModel`
+  is rejected 422 ("Unknown aspect upstreamLineage for entity mlModel"); the
+  reverse — a dataset naming an `mlModel` as its upstream — is rejected 422 too
+  ("Invalid format for aspect: dataset"), because `upstreams[].dataset` is a
+  dataset-typed field. `MLModelDeployment` is not in the GraphQL schema at all.
+  The dataset chain is therefore bridged by `dataJob` entities and their output
+  datasets. See `_ml_bridge_mcps` in `scripts/ingest_lineage.py`.
+- **A model links to lineage through jobs, not datasets.** `mlModelProperties`
+  accepts `trainingJobs` and `downstreamJobs`, producing `TrainedBy` and
+  `UsedBy` edges. Without them the model page renders with no lineage at all,
+  since the dataset chain routes around the model rather than through it. Note
+  `searchAcrossLineage` does not follow these edges — the UI's relationship-based
+  `entity.lineage` resolver does, which is why the browser shows the connection
+  and a hop-count traversal does not. See `_properties_aspect`.
 - **DOWNSTREAM traversal does not follow dataset→job edges.** Those are
   `Consumes`; only `DownstreamOf` is traversed. Each bridge output dataset
   therefore also carries an `UpstreamLineage` aspect.
