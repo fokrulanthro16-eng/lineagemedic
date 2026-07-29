@@ -14,6 +14,7 @@ produce a stable diff instead of noise on every execution.
 from __future__ import annotations
 
 import json
+import tempfile
 from pathlib import Path
 from typing import Any
 
@@ -21,7 +22,6 @@ from lineagemedic.adapters.fixture import FixtureMetadataAdapter, FixtureWriteba
 from lineagemedic.data.seed_healthcare import REFERENCE_NOW, build_database
 from lineagemedic.scenarios import ALL_SCENARIOS
 from lineagemedic.workflow import Workflow
-from lineagemedic_api.config import Settings
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 EXAMPLES = REPO_ROOT / "examples"
@@ -51,24 +51,31 @@ def _normalise(value: Any) -> Any:
 
 
 def main() -> int:
-    settings = Settings()
-    build_database(settings.db_path)
-    # Pinned to the same reference clock the data was generated against, so
-    # freshness checks give the same answer on every run.
-    workflow = Workflow(
-        metadata=FixtureMetadataAdapter(),
-        writeback=FixtureWritebackAdapter(),
-        db_path=settings.db_path,
-        now=REFERENCE_NOW,
-    )
+    # Build into a throwaway directory, never the configured ``db_path``. The
+    # examples must be reproducible, so both the seed and the judge are pinned
+    # to ``REFERENCE_NOW`` -- but the demo's database is deliberately seeded
+    # from wall-clock so its HEALTHY control does not age into a warning.
+    # Writing a frozen-clock database to the shared path would hand the running
+    # demo data that is already hours stale and break that control.
+    with tempfile.TemporaryDirectory() as tmp:
+        db_path = build_database(Path(tmp) / "healthcare.db", reference_now=REFERENCE_NOW)
+        workflow = Workflow(
+            metadata=FixtureMetadataAdapter(),
+            writeback=FixtureWritebackAdapter(),
+            db_path=db_path,
+            now=REFERENCE_NOW,
+        )
 
-    EXAMPLES.mkdir(parents=True, exist_ok=True)
-    for scenario in ALL_SCENARIOS.values():
-        diagnosis = workflow.diagnose(scenario)
-        payload = _normalise(json.loads(diagnosis.model_dump_json()))
-        target = EXAMPLES / f"incident-{diagnosis.severity.value}.json"
-        target.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
-        print(f"  wrote {target.relative_to(REPO_ROOT)} ({diagnosis.severity.value})")
+        EXAMPLES.mkdir(parents=True, exist_ok=True)
+        for scenario in ALL_SCENARIOS.values():
+            diagnosis = workflow.diagnose(scenario)
+            payload = _normalise(json.loads(diagnosis.model_dump_json()))
+            # Named for the scenario, not for the derived severity: two
+            # scenarios can legitimately derive the same severity, and keying
+            # on the outcome made one silently overwrite the other's file.
+            target = EXAMPLES / f"incident-{scenario.expected_severity.value}.json"
+            target.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
+            print(f"  wrote {target.relative_to(REPO_ROOT)} ({diagnosis.severity.value})")
 
     return 0
 
