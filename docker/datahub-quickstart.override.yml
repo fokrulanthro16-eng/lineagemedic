@@ -1,0 +1,47 @@
+# Compose override for the official DataHub v1.5.0.6 quickstart file.
+#
+# Why this file exists
+# --------------------
+# The quickstart is normally launched by ``datahub docker quickstart``, which
+# injects a token-service signing key at runtime rather than storing it in the
+# published compose file. That CLI path is unavailable here: the DataHub CLI
+# parses ``docker compose version`` with a regex expecting ``v2.x`` and rejects
+# the installed Compose v5.1.4 as "v1". Running the official compose file
+# directly is the supported fallback, but it starts without the injected
+# variables, and ``datahub-upgrade`` then fails at boot with:
+#
+#     java.lang.IllegalArgumentException:
+#     authentication.tokenService.signingKey must be set and not be empty
+#
+# ``datahub-gms`` depends on ``datahub-upgrade`` completing successfully, so a
+# missing key stops the entire stack before GMS is ever created.
+#
+# This override supplies exactly the variables the CLI would have supplied, and
+# nothing else. The upstream file is left unmodified so it can be re-downloaded
+# or upgraded without losing local changes.
+#
+# The key below is the value DataHub's own quickstart uses. It is a LOCAL
+# DEVELOPMENT DEFAULT for a stack bound to localhost, and is deliberately
+# committed so the demo is reproducible. It is not a secret and must never be
+# used for an internet-reachable deployment; a real deployment should set
+# DATAHUB_SECRET in the environment and remove this file.
+#
+# Usage::
+#
+#     docker compose -p datahub \
+#       -f ~/.datahub/quickstart/docker-compose.yml \
+#       -f docker/datahub-quickstart.override.yml up -d
+
+services:
+  datahub-upgrade:
+    environment:
+      # Consumed by DataHubTokenServiceFactory during Spring context startup.
+      - DATAHUB_TOKEN_SERVICE_SIGNING_KEY=WnEdIeTG/VVCLQqGwC/BAkqyY0k+H8NEAtWGejrBI94=
+      - DATAHUB_TOKEN_SERVICE_SALT=ohDVbJBvHHVJh9S/UA4BYF9COuNnqqVhr9MLKEGXk1O=
+
+  datahub-gms:
+    environment:
+      # GMS validates the same key, and must agree with datahub-upgrade so that
+      # tokens minted by one are accepted by the other.
+      - DATAHUB_TOKEN_SERVICE_SIGNING_KEY=WnEdIeTG/VVCLQqGwC/BAkqyY0k+H8NEAtWGejrBI94=
+      - DATAHUB_TOKEN_SERVICE_SALT=ohDVbJBvHHVJh9S/UA4BYF9COuNnqqVhr9MLKEGXk1O=

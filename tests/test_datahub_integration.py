@@ -42,7 +42,6 @@ from lineagemedic.adapters.datahub_sdk import DataHubWritebackAdapter
 from lineagemedic.fixtures.graph import (
     URN_BILLING_SUMMARY,
     URN_PATIENT_FEATURES,
-    URN_PRODUCTION_ENDPOINT,
     URN_RAW_BILLING,
     URN_RAW_PATIENTS,
     URN_READMISSION_MODEL,
@@ -54,13 +53,26 @@ GMS_URL = os.environ.get("DATAHUB_GMS_URL", "http://localhost:8080").rstrip("/")
 FRONTEND_URL = os.environ.get("DATAHUB_FRONTEND_URL", "http://localhost:9002").rstrip("/")
 TOKEN = os.environ.get("DATAHUB_GMS_TOKEN", "")
 
-#: The patient chain, in dependency order.
+#: Outputs of the two ML jobs, which is how the live catalog represents the
+#: model and the endpoint in its lineage graph. DataHub v1.6.0 cannot return
+#: ``mlModel`` or ``mlModelDeployment`` entities from a lineage traversal - see
+#: ``_ml_bridge_mcps`` in ``scripts/ingest_lineage.py`` for the evidence - so
+#: these datasets, not the ML entities, are what the blast radius must reach.
+URN_MODEL_PREDICTIONS = (
+    "urn:li:dataset:(urn:li:dataPlatform:mlflow,lineagemedic.model_predictions,PROD)"
+)
+URN_ENDPOINT_PREDICTIONS = (
+    "urn:li:dataset:(urn:li:dataPlatform:sagemaker,"
+    "lineagemedic.endpoint_predictions,PROD)"
+)
+
+#: The patient chain as it exists in the live catalog, in dependency order.
 PATIENT_CHAIN = [
     URN_RAW_PATIENTS,
     URN_STAGING_PATIENTS,
     URN_PATIENT_FEATURES,
-    URN_READMISSION_MODEL,
-    URN_PRODUCTION_ENDPOINT,
+    URN_MODEL_PREDICTIONS,
+    URN_ENDPOINT_PREDICTIONS,
 ]
 
 
@@ -144,9 +156,9 @@ def test_live_lineage_reaches_the_production_endpoint(
     """The full four-hop patient chain is traversable from the anchor.
 
     This is the single most important integration assertion: the critical
-    scenario's severity depends on the blast radius reaching a deployed model
-    and a production endpoint. A truncated graph would downgrade a critical
-    incident to a warning without any error being raised.
+    scenario's severity depends on the blast radius reaching the model's output
+    and the production endpoint's output. A truncated graph would downgrade a
+    critical incident to a warning without any error being raised.
     """
     graph = adapter.get_lineage(URN_RAW_PATIENTS)
     urns = {a.urn for a in graph.assets}
@@ -156,8 +168,8 @@ def test_live_lineage_reaches_the_production_endpoint(
         assert expected in urns, f"{expected} missing from live lineage"
 
     reachable = graph.downstream_closure(URN_RAW_PATIENTS)
-    assert URN_PRODUCTION_ENDPOINT in reachable
-    assert URN_READMISSION_MODEL in reachable
+    assert URN_ENDPOINT_PREDICTIONS in reachable
+    assert URN_MODEL_PREDICTIONS in reachable
 
 
 def test_billing_branch_is_not_connected_to_the_patient_branch(
@@ -183,9 +195,13 @@ def test_billing_branch_is_not_connected_to_the_patient_branch(
 def test_entity_kinds_are_classified_from_datahub(
     adapter: DataHubMetadataAdapter,
 ) -> None:
-    """Models and endpoints must not be flattened into plain datasets."""
+    """Models must not be flattened into plain datasets.
+
+    The endpoint is not checked here because DataHub v1.6.0 has no
+    ``MLModelDeployment`` GraphQL type to read it back through; the catalog
+    represents it as ``endpoint_predictions`` plus a serving job.
+    """
     assert adapter.get_asset(URN_READMISSION_MODEL).kind is AssetKind.ML_MODEL
-    assert adapter.get_asset(URN_PRODUCTION_ENDPOINT).kind is AssetKind.ENDPOINT
     assert adapter.get_asset(URN_RAW_PATIENTS).kind is AssetKind.DATASET
 
 

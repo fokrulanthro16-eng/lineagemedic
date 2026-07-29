@@ -30,6 +30,7 @@ Honesty rules this module must not break
 
 from __future__ import annotations
 
+import re
 import time
 from collections.abc import Iterator
 from contextlib import contextmanager
@@ -76,39 +77,90 @@ _ENTITY_PATH = {
 
 # GraphQL fragment shared by the entity and lineage queries. Kept in one place so
 # the two code paths cannot drift into returning differently-shaped assets.
+#: Selections shared by every entity-returning query, so the search, entity, and
+#: lineage paths cannot drift apart in what they ask for.
+#:
+#: Two constraints of DataHub v1.6.0's GraphQL schema are encoded here.
+#:
+#: ``MLModelDeployment`` is deliberately absent: it is not a type in the schema
+#: (nor is ``MLMODEL_DEPLOYMENT`` a member of the ``EntityType`` enum), and
+#: naming it makes the whole query fail validation with "Unknown type".
+#: Deployments are represented in the live catalog by the ``dataJob`` that
+#: serves them; see ``scripts/ingest_lineage.py``.
+#:
+#: Every per-fragment selection is aliased. Without aliases, GraphQL compares
+#: identically-named fields across inline fragments and rejects the query when
+#: their nullability or list shapes differ - which they do here, e.g. ``name``
+#: and ``tags/tags`` between ``Dataset`` and ``MLModel``. The aliases keep each
+#: fragment's fields in their own namespace, and the parser reads them back by
+#: alias.
 _ENTITY_FIELDS = """
     urn
     type
     ... on Dataset {
-      name
-      platform { name }
-      properties { name description }
-      subTypes { typeNames }
-      tags { tags { tag { urn name } } }
-      ownership { owners { owner { ... on CorpGroup { urn name }
-                                   ... on CorpUser  { urn username } }
-                           type } }
-      schemaMetadata { fields { fieldPath nativeDataType nullable description } }
+      dsExists: exists
+      dsName: name
+      dsPlatform: platform { name }
+      dsProperties: properties { name description }
+      dsSubTypes: subTypes { typeNames }
+      dsTags: tags { tags { tag { urn name } } }
+      dsOwnership: ownership { owners { owner { ... on CorpGroup { urn name }
+                                                ... on CorpUser  { urn username } }
+                                        type } }
+      dsSchema: schemaMetadata { fields { fieldPath nativeDataType nullable description } }
     }
     ... on MLModel {
-      name
-      platform { name }
-      properties { description }
-      tags { tags { tag { urn name } } }
-      ownership { owners { owner { ... on CorpGroup { urn name }
-                                   ... on CorpUser  { urn username } }
-                           type } }
+      mlExists: exists
+      mlName: name
+      mlPlatform: platform { name }
+      mlProperties: properties { description }
+      mlTags: tags { tags { tag { urn name } } }
+      mlOwnership: ownership { owners { owner { ... on CorpGroup { urn name }
+                                                ... on CorpUser  { urn username } }
+                                        type } }
     }
-    ... on MLModelDeployment {
-      name
-      platform { name }
-      properties { description }
-      tags { tags { tag { urn name } } }
-      ownership { owners { owner { ... on CorpGroup { urn name }
-                                   ... on CorpUser  { urn username } }
-                           type } }
+    ... on DataJob {
+      jobProperties: properties { name description }
+      jobTags: tags { tags { tag { urn name } } }
+      jobOwnership: ownership { owners { owner { ... on CorpGroup { urn name }
+                                                 ... on CorpUser  { urn username } }
+                                         type } }
     }
 """
+
+#: Prefixes used to alias fields per inline fragment in :data:`_ENTITY_FIELDS`.
+_ALIAS_PREFIXES = ("ds", "ml", "job")
+
+
+def _aliased(entity: dict[str, Any], suffix: str) -> Any:
+    """Read a field that :data:`_ENTITY_FIELDS` aliases per fragment.
+
+    Only one fragment matches any given entity, so at most one alias is present;
+    this returns the first that is. The unprefixed name is tried last so that
+    any future unaliased selection keeps working.
+    """
+    for prefix in _ALIAS_PREFIXES:
+        value = entity.get(f"{prefix}{suffix}")
+        if value is not None:
+            return value
+    return entity.get(suffix[0].lower() + suffix[1:])
+
+
+def _platform_from_urn(urn: str) -> str:
+    """Recover the platform from a URN when the entity does not expose one.
+
+    ``DataJob`` has no ``platform`` field in DataHub's GraphQL schema, but its
+    URN embeds the orchestrator. Parsing it is better than reporting "unknown"
+    for an entity whose platform is right there in its identifier.
+    """
+    match = re.search(r"urn:li:dataPlatform:([^,)]+)", urn)
+    if match:
+        return match.group(1)
+    match = re.match(r"urn:li:dataJob:\(urn:li:dataFlow:\(([^,]+),", urn)
+    if match:
+        return match.group(1)
+    return "unknown"
+
 
 _SEARCH_QUERY = f"""
 query search($input: SearchAcrossEntitiesInput!) {{
@@ -124,11 +176,16 @@ query getEntity($urn: String!) {{
 }}
 """
 
+#: Note the absence of a depth limit. DataHub v1.6.0 exposes no ``maxHops``:
+#: it is not a field of ``SearchFlags`` (which the previous version of this
+#: query passed it to, failing validation) and not a field of ``LineageFlags``
+#: either. The traversal is therefore bounded by ``count`` alone, and the
+#: caller's requested depth is applied client-side in :meth:`get_lineage` by
+#: filtering on the ``degree`` DataHub returns per result.
 _LINEAGE_QUERY = f"""
-query getLineage($urn: String!, $direction: LineageDirection!, $depth: Int!) {{
+query getLineage($urn: String!, $direction: LineageDirection!) {{
   searchAcrossLineage(
-    input: {{urn: $urn, direction: $direction, count: 100, query: "*",
-            searchFlags: {{maxHops: $depth}}}}
+    input: {{urn: $urn, direction: $direction, count: 100, query: "*"}}
   ) {{
     searchResults {{ degree entity {{ {_ENTITY_FIELDS} }} }}
   }}
@@ -265,6 +322,13 @@ class DataHubMetadataAdapter:
             entity = data.get("entity")
             if not entity:
                 raise AdapterError(f"DataHub has no entity with URN {urn}")
+            # DataHub does not return null for an unknown URN. It returns a stub
+            # carrying the URN, a type derived from it, and ``exists: false``.
+            # Without this check the adapter would happily build an Asset for a
+            # dataset that is not in the catalog - inventing an entity from a
+            # string the caller supplied.
+            if _aliased(entity, "Exists") is False:
+                raise AdapterError(f"DataHub has no entity with URN {urn}")
             asset = self._to_asset(entity)
             urns.append(asset.urn)
             return asset
@@ -312,16 +376,21 @@ class DataHubMetadataAdapter:
             ):
                 data = self._graphql(
                     _LINEAGE_QUERY,
-                    {"urn": urn, "direction": direction, "depth": max(1, depth)},
+                    {"urn": urn, "direction": direction},
                 )
                 results = (data.get("searchAcrossLineage") or {}).get("searchResults") or []
+                limit = max(1, depth)
                 for result in results:
                     entity = result.get("entity")
                     if not entity:
                         continue
+                    degree = int(result.get("degree") or 1)
+                    # Depth is enforced here rather than in the query; see the
+                    # note on _LINEAGE_QUERY for why the server cannot do it.
+                    if degree > limit:
+                        continue
                     asset = self._to_asset(entity)
                     collected.setdefault(asset.urn, asset)
-                    degree = int(result.get("degree") or 1)
                     by_direction[direction].setdefault(degree, []).append(asset.urn)
 
             self._link_edges(anchor.urn, collected, by_direction)
@@ -394,13 +463,18 @@ class DataHubMetadataAdapter:
             raise AdapterError(f"DataHub entity has no URN: {entity!r}")
 
         entity_type = (entity.get("type") or "").upper()
-        properties = entity.get("properties") or {}
-        name = entity.get("name") or properties.get("name") or urn.split(",")[-2:-1] or urn
+        properties = _aliased(entity, "Properties") or {}
+        name = (
+            _aliased(entity, "Name")
+            or properties.get("name")
+            or urn.split(",")[-2:-1]
+            or urn
+        )
         if isinstance(name, list):
             name = name[0] if name else urn
 
-        platform = ((entity.get("platform") or {}).get("name")) or "unknown"
-        subtypes = (entity.get("subTypes") or {}).get("typeNames") or []
+        platform = ((_aliased(entity, "Platform") or {}).get("name")) or _platform_from_urn(urn)
+        subtypes = (_aliased(entity, "SubTypes") or {}).get("typeNames") or []
 
         return Asset(
             urn=urn,
@@ -433,7 +507,7 @@ class DataHubMetadataAdapter:
 
     @staticmethod
     def _tags(entity: dict[str, Any]) -> list[str]:
-        wrapper = entity.get("tags") or {}
+        wrapper = _aliased(entity, "Tags") or {}
         names: list[str] = []
         for association in wrapper.get("tags") or []:
             name = (association.get("tag") or {}).get("name")
@@ -443,7 +517,7 @@ class DataHubMetadataAdapter:
 
     @staticmethod
     def _owners(entity: dict[str, Any]) -> list[Owner]:
-        ownership = entity.get("ownership") or {}
+        ownership = _aliased(entity, "Ownership") or {}
         owners: list[Owner] = []
         for record in ownership.get("owners") or []:
             owner = record.get("owner") or {}
@@ -463,7 +537,7 @@ class DataHubMetadataAdapter:
 
     @staticmethod
     def _schema_fields(entity: dict[str, Any]) -> list[SchemaField]:
-        schema = entity.get("schemaMetadata") or {}
+        schema = _aliased(entity, "Schema") or {}
         fields: list[SchemaField] = []
         for field in schema.get("fields") or []:
             path = field.get("fieldPath")

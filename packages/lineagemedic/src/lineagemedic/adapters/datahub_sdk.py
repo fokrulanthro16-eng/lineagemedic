@@ -37,6 +37,16 @@ if TYPE_CHECKING:  # pragma: no cover - typing only
     from datahub.emitter.rest_emitter import DatahubRestEmitter
 
 
+class TagReadError(RuntimeError):
+    """Raised when an entity's current tags cannot be established.
+
+    Because ``globalTags`` is replaced wholesale rather than appended to, a
+    write that proceeds without knowing the current tags will delete them. This
+    error exists so that an unreadable current state stops the write instead of
+    silently narrowing it.
+    """
+
+
 class DataHubSdkUnavailableError(RuntimeError):
     """Raised when the DataHub SDK is needed but not installed.
 
@@ -140,16 +150,27 @@ class DataHubWritebackAdapter:
     def _existing_tags(self, urn: str) -> list[str]:
         """Current tag URNs on an entity, so a merge does not clobber them.
 
-        A read failure here is deliberately non-fatal: it returns an empty list
-        and the caller proceeds to write only the incident tags. That risks
-        dropping a pre-existing tag, so the situation is logged loudly rather
-        than passing silently.
+        Raises :class:`TagReadError` if the current state cannot be established.
+        That is deliberate, and was not the original design: an earlier version
+        returned an empty list on failure and let the caller write only the
+        incident tags. Because ``globalTags`` is a whole-aspect replace, "I could
+        not read the tags" then became "the asset now has no tags but mine",
+        and a live run destroyed the healthcare/phi/silver tags on
+        ``staging_patients``.
+
+        The failure was silent for a second reason worth recording: a GraphQL
+        *validation* error is returned as HTTP 200 with an ``errors`` array, so
+        ``raise_for_status()`` did not fire and a structurally broken query was
+        indistinguishable from an asset with no tags. Both conditions now raise.
         """
+        # ``MLModelDeployment`` is not a type in DataHub v1.6.0's GraphQL schema
+        # and naming it fails the whole query at validation. Aliases keep the
+        # two remaining fragments from conflicting on ``tags``' list shape.
         query = """
         query tags($urn: String!) {
-          entity(urn: $urn) { ... on Dataset { tags { tags { tag { urn } } } }
-                              ... on MLModel { tags { tags { tag { urn } } } }
-                              ... on MLModelDeployment { tags { tags { tag { urn } } } } }
+          entity(urn: $urn) { ... on Dataset { dsTags: tags { tags { tag { urn } } } }
+                              ... on MLModel { mlTags: tags { tags { tag { urn } } } }
+                              ... on DataJob { jobTags: tags { tags { tag { urn } } } } }
         }
         """
         try:
@@ -162,16 +183,26 @@ class DataHubWritebackAdapter:
             response.raise_for_status()
             payload = response.json()
         except (httpx.HTTPError, ValueError) as exc:
-            logger.warning(
-                "could not read existing tags for %s; a merge is not possible and "
-                "pre-existing tags may be lost: %s",
-                urn,
-                exc,
+            raise TagReadError(
+                f"Could not read existing tags for {urn}, so a safe merge is "
+                f"impossible and the write was not attempted: {exc}"
+            ) from exc
+
+        if payload.get("errors"):
+            # HTTP 200 with an errors array - see this method's docstring.
+            messages = "; ".join(e.get("message", "?") for e in payload["errors"])
+            raise TagReadError(
+                f"Could not read existing tags for {urn}, so a safe merge is "
+                f"impossible and the write was not attempted: {messages}"
             )
-            return []
 
         entity = (payload.get("data") or {}).get("entity") or {}
-        wrapper = entity.get("tags") or {}
+        wrapper = (
+            entity.get("dsTags")
+            or entity.get("mlTags")
+            or entity.get("jobTags")
+            or {}
+        )
         tag_urns: list[str] = []
         for association in wrapper.get("tags") or []:
             tag_urn = (association.get("tag") or {}).get("urn")
@@ -184,8 +215,15 @@ class DataHubWritebackAdapter:
 
         This is the check that separates "we sent a write" from "DataHub has the
         data". Its result decides whether the receipt says ``APPLIED``.
+
+        A read failure is reported as "nothing verified" rather than propagating,
+        because an unverifiable write must be reported as ``FAILED``, which is
+        what the caller does with a non-empty ``missing`` list.
         """
-        present = set(self._existing_tags(urn))
+        try:
+            present = set(self._existing_tags(urn))
+        except TagReadError:
+            return False, list(expected_tags)
         expected_urns = [self._sdk.make_tag_urn(t) for t in expected_tags]
         missing = [t for t, u in zip(expected_tags, expected_urns, strict=True) if u not in present]
         return (not missing), missing

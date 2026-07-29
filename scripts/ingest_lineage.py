@@ -13,9 +13,15 @@ phase an *integration* rather than a second, divergent definition of the world.
 Two branches are ingested:
 
     raw_patients -> staging_patients -> patient_features
-                 -> readmission_risk_model -> production_readmission_endpoint
+                 -> [train_readmission_model] -> [serve_readmission_endpoint]
 
     raw_billing  -> billing_summary
+
+The two bracketed nodes are ``dataJob`` entities. The ``mlModel`` and
+``mlModelDeployment`` entities are also ingested with their full metadata, but
+DataHub v1.6.0 cannot return either type from a lineage traversal, so the jobs
+that produce them carry the reachability. :func:`_ml_bridge_mcps` documents the
+evidence for that constraint.
 
 The billing branch is deliberately kept free of any lineage edge to the patient
 branch. The Impact Agent must be able to examine it and clear it; if ingestion
@@ -40,6 +46,9 @@ from datahub.emitter.mcp import MetadataChangeProposalWrapper
 from datahub.emitter.rest_emitter import DatahubRestEmitter
 from datahub.metadata.schema_classes import (
     AuditStampClass,
+    DataFlowInfoClass,
+    DataJobInfoClass,
+    DataJobInputOutputClass,
     DatasetLineageTypeClass,
     DatasetPropertiesClass,
     GlobalTagsClass,
@@ -59,11 +68,23 @@ from datahub.metadata.schema_classes import (
     UpstreamLineageClass,
 )
 
-from lineagemedic.fixtures.graph import build_graph
+from lineagemedic.fixtures.graph import (
+    PLATFORM_MLFLOW,
+    PLATFORM_SAGEMAKER,
+    URN_PATIENT_FEATURES,
+    build_graph,
+    dataset_urn,
+)
 from lineagemedic.models import Asset, AssetKind, DataSource, Owner
 
 #: DataHub records who made a change. This is the ingestion actor, not a person.
 _INGESTION_ACTOR = "urn:li:corpuser:datahub"
+
+#: Output datasets of the two ML jobs. They exist in DataHub but not in the
+#: fixture graph, because the fixture graph collapses each job into the artifact
+#: it produces. See :func:`_ml_bridge_mcps` for why the live catalog cannot.
+URN_MODEL_PREDICTIONS = dataset_urn("model_predictions", PLATFORM_MLFLOW)
+URN_ENDPOINT_PREDICTIONS = dataset_urn("endpoint_predictions", PLATFORM_SAGEMAKER)
 
 #: Maps the fixture's ownership vocabulary onto DataHub's ownership type enum.
 _OWNERSHIP_TYPE = {
@@ -74,11 +95,17 @@ _OWNERSHIP_TYPE = {
 
 #: DataHub subtypes, so the UI renders each node as what it actually is rather
 #: than as an undifferentiated "Dataset".
+#:
+#: :data:`AssetKind.ENDPOINT` is deliberately absent. DataHub's entity registry
+#: does not define a ``subTypes`` aspect for ``mlModelDeployment`` and rejects
+#: the emit with HTTP 422 ("Unknown aspect subTypes for entity
+#: mlModelDeployment"). A deployment is already unambiguous in the UI by virtue
+#: of its entity type, so there is nothing to disambiguate and no reason to
+#: force the aspect through.
 _SUBTYPES = {
     AssetKind.DATASET: ["Table"],
     AssetKind.FEATURE_TABLE: ["Feature Table"],
     AssetKind.ML_MODEL: ["ML Model"],
-    AssetKind.ENDPOINT: ["Inference Endpoint"],
 }
 
 
@@ -89,6 +116,8 @@ class IngestionResult:
     entities: int = 0
     aspects: int = 0
     lineage_edges: int = 0
+    #: Aspects emitted for the datajob bridge; see :func:`_ml_bridge_mcps`.
+    bridge_aspects: int = 0
     failures: list[str] = None  # type: ignore[assignment]
 
     def __post_init__(self) -> None:
@@ -163,19 +192,15 @@ def _entity_type(asset: Asset) -> str:
 def _properties_aspect(asset: Asset) -> object:
     """The type-appropriate properties aspect carrying name and description.
 
-    For an ML model this aspect also carries lineage: ``trainingJobs`` is not
-    the right field for datasets, so upstream feature tables are declared via
-    the model's own properties, and the deployment it serves via ``deployments``.
-    DataHub rejects ``UpstreamLineage`` on ``mlModel``/``mlModelDeployment``
-    entities, so this is the supported way to connect the ML half of the chain.
+    The ML model's ``deployments`` field records the endpoint it serves. Note
+    that this records the relationship but does *not* create a traversable
+    lineage edge; see :func:`_ml_bridge_mcps` for why, and for what does.
     """
     if asset.kind is AssetKind.ML_MODEL:
         return MLModelPropertiesClass(
             name=asset.name,
             description=asset.description,
             customProperties={"managed_by": "lineagemedic"},
-            # Feature tables the model consumes -> the upstream half of the edge.
-            trainingJobs=[],
             deployments=list(asset.downstreams),
         )
     if asset.kind is AssetKind.ENDPOINT:
@@ -193,16 +218,20 @@ def _properties_aspect(asset: Asset) -> object:
 def _aspects_for(asset: Asset) -> list[object]:
     """Every aspect this asset should carry in DataHub.
 
-    Schema metadata is emitted only for assets that actually declare columns.
-    Emitting an empty schema for an ML model would assert something false about
-    the entity - that it has a known, empty column set.
+    Two aspects are conditional. Schema metadata is emitted only for assets that
+    actually declare columns, because an empty schema on an ML model would
+    assert something false - that it has a known, empty column set. Subtypes are
+    emitted only for entity types whose registry defines the aspect; see
+    :data:`_SUBTYPES`.
     """
     aspects: list[object] = [
         _properties_aspect(asset),
         _ownership(asset.owners),
         _global_tags(asset.tags),
-        SubTypesClass(typeNames=_SUBTYPES[asset.kind]),
     ]
+    subtypes = _SUBTYPES.get(asset.kind)
+    if subtypes is not None:
+        aspects.append(SubTypesClass(typeNames=subtypes))
     if asset.schema_fields:
         aspects.append(_schema_metadata(asset))
     return aspects
@@ -223,6 +252,196 @@ def _lineage_aspect(asset: Asset) -> UpstreamLineageClass | None:
             for up in asset.upstreams
         ]
     )
+
+
+def _ml_bridge_mcps(graph: object) -> list[MetadataChangeProposalWrapper]:
+    """Datajob nodes that make the ML half of the chain traversable.
+
+    Why this exists
+    ---------------
+    LineageMedic's severity reasoning depends on a blast radius that reaches the
+    deployed model and the production endpoint. In DataHub v1.6.0, ``mlModel``
+    and ``mlModelDeployment`` cannot participate in a lineage traversal at all.
+    That was established against the running instance, not assumed:
+
+    * ``upstreamLineage`` on ``mlModel`` is rejected with HTTP 422, "Unknown
+      aspect upstreamLineage for entity mlModel".
+    * ``subTypes`` on ``mlModelDeployment`` is rejected with HTTP 422.
+    * ``MLModelDeployment`` is not a type in the GraphQL schema, and
+      ``MLMODEL_DEPLOYMENT`` is not a member of the ``EntityType`` enum, so the
+      entity cannot be returned by ``searchAcrossLineage`` under any query.
+    * ``MLModelProperties.deployments`` and the ``trainingData`` aspect are both
+      accepted and stored, but neither yields a lineage edge:
+      ``searchAcrossLineage`` from ``patient_features`` returned ``total: 0``
+      after each was emitted.
+
+    ``dataJob`` does traverse, so the two real process steps in this pipeline
+    are modelled as the jobs they actually are, each with the dataset it
+    produces:
+
+        patient_features   -> [train_readmission_model]      -> model_predictions
+        model_predictions  -> [serve_readmission_endpoint]   -> endpoint_predictions
+
+    with the datasets additionally linked directly to each other::
+
+        patient_features -> model_predictions -> endpoint_predictions
+
+    Two further constraints, both established by probing rather than assumed.
+
+    A ``dataJob`` is indexed into the lineage graph only when it declares
+    **both** inputs and outputs. Emitting a job with an empty ``outputDatasets``
+    was accepted by GMS and the entity was retrievable by URN, but it produced
+    no edge. Hence each job below names a real output dataset.
+
+    More importantly, ``searchAcrossLineage`` in the DOWNSTREAM direction does
+    not follow dataset-to-job edges. A dataset consumed by a job is joined by a
+    ``Consumes`` relationship, whereas dataset-to-dataset lineage uses
+    ``DownstreamOf``; only the latter is traversed. Concretely, on this
+    instance:
+
+    * ``entity(patient_features).lineage(DOWNSTREAM)`` returns the training job
+      via ``Consumes`` - the edge is genuinely in the graph.
+    * ``searchAcrossLineage(patient_features, DOWNSTREAM)`` returns ``total:
+      0``, even with ``types: [DATA_JOB, DATASET]`` and after the search index
+      has caught up (all 11 entities are searchable).
+    * ``searchAcrossLineage(train_job, DOWNSTREAM)`` works, reaching
+      ``endpoint_predictions`` at degree 2.
+
+    So the break is exactly one hop: dataset -> job. Because the adapter's blast
+    radius is a DOWNSTREAM traversal, the jobs alone would leave the model and
+    endpoint unreachable from an incident on a patient table. Each bridge output
+    dataset therefore *also* carries an ``UpstreamLineage`` aspect naming the
+    dataset upstream of its job, which creates the ``DownstreamOf`` edge that
+    DOWNSTREAM traversal does follow. The job edges are kept as well: they are
+    the accurate description of what produces what, and they make the pipeline
+    render correctly in the DataHub UI.
+
+    This is a faithful representation rather than a workaround. Training a model
+    and serving an endpoint *are* jobs, and each does emit a table of scores;
+    the fixture graph collapses each job into the artifact it produces, which is
+    the right abstraction for the incident UI but not one DataHub's lineage
+    graph shares.
+
+    The ``mlModel`` and ``mlModelDeployment`` entities are still ingested, with
+    their real descriptions, owners, and tags. They remain the catalog's record
+    of the model and the endpoint; these jobs carry the reachability.
+    """
+    flow_urn = f"urn:li:dataFlow:({PLATFORM_MLFLOW},lineagemedic.readmission_pipeline,PROD)"
+    train_urn = f"urn:li:dataJob:({flow_urn},train_readmission_model)"
+    serve_urn = f"urn:li:dataJob:({flow_urn},serve_readmission_endpoint)"
+
+    return [
+        # The datasets each job emits. These are the scores the model and the
+        # endpoint actually produce, and they are what makes each job
+        # traversable.
+        MetadataChangeProposalWrapper(
+            entityType="dataset",
+            entityUrn=URN_MODEL_PREDICTIONS,
+            aspect=DatasetPropertiesClass(
+                name="model_predictions",
+                description=(
+                    "Batch readmission risk scores written by "
+                    "readmission_risk_model."
+                ),
+                customProperties={"managed_by": "lineagemedic"},
+            ),
+        ),
+        MetadataChangeProposalWrapper(
+            entityType="dataset",
+            entityUrn=URN_ENDPOINT_PREDICTIONS,
+            aspect=DatasetPropertiesClass(
+                name="endpoint_predictions",
+                description=(
+                    "Live readmission risk scores served by "
+                    "production_readmission_endpoint. Clinician-facing."
+                ),
+                customProperties={"managed_by": "lineagemedic"},
+            ),
+        ),
+        MetadataChangeProposalWrapper(
+            entityType="dataFlow",
+            entityUrn=flow_urn,
+            aspect=DataFlowInfoClass(
+                name="readmission_pipeline",
+                description=(
+                    "Trains the 30-day readmission risk model from patient "
+                    "features and serves it behind the production endpoint."
+                ),
+                customProperties={"managed_by": "lineagemedic"},
+            ),
+        ),
+        MetadataChangeProposalWrapper(
+            entityType="dataJob",
+            entityUrn=train_urn,
+            aspect=DataJobInfoClass(
+                name="train_readmission_model",
+                type="BATCH_SCHEDULED",
+                description=(
+                    "Trains readmission_risk_model on patient_features. "
+                    "Corresponds to the mlModel entity of the same name."
+                ),
+            ),
+        ),
+        MetadataChangeProposalWrapper(
+            entityType="dataJob",
+            entityUrn=train_urn,
+            aspect=DataJobInputOutputClass(
+                inputDatasets=[URN_PATIENT_FEATURES],
+                outputDatasets=[URN_MODEL_PREDICTIONS],
+            ),
+        ),
+        MetadataChangeProposalWrapper(
+            entityType="dataJob",
+            entityUrn=serve_urn,
+            aspect=DataJobInfoClass(
+                name="serve_readmission_endpoint",
+                type="BATCH_SCHEDULED",
+                description=(
+                    "Serves readmission_risk_model as "
+                    "production_readmission_endpoint. Corresponds to the "
+                    "mlModelDeployment entity of the same name."
+                ),
+            ),
+        ),
+        MetadataChangeProposalWrapper(
+            entityType="dataJob",
+            entityUrn=serve_urn,
+            # Consumes the training job's output, so the endpoint sits strictly
+            # downstream of the model rather than beside it.
+            aspect=DataJobInputOutputClass(
+                inputDatasets=[URN_MODEL_PREDICTIONS],
+                inputDatajobs=[train_urn],
+                outputDatasets=[URN_ENDPOINT_PREDICTIONS],
+            ),
+        ),
+        # Dataset-to-dataset lineage mirroring each job, so that a DOWNSTREAM
+        # traversal - which does not follow ``Consumes`` - still reaches the ML
+        # half of the chain. See this function's docstring.
+        MetadataChangeProposalWrapper(
+            entityType="dataset",
+            entityUrn=URN_MODEL_PREDICTIONS,
+            aspect=UpstreamLineageClass(
+                upstreams=[
+                    UpstreamClass(
+                        dataset=URN_PATIENT_FEATURES,
+                        type=DatasetLineageTypeClass.TRANSFORMED,
+                    )
+                ]
+            ),
+        ),
+        MetadataChangeProposalWrapper(
+            entityType="dataset",
+            entityUrn=URN_ENDPOINT_PREDICTIONS,
+            aspect=UpstreamLineageClass(
+                upstreams=[
+                    UpstreamClass(
+                        dataset=URN_MODEL_PREDICTIONS,
+                        type=DatasetLineageTypeClass.TRANSFORMED,
+                    )
+                ]
+            ),
+        ),
+    ]
 
 
 def emit_graph(emitter: DatahubRestEmitter, *, dry_run: bool = False) -> IngestionResult:
@@ -266,6 +485,19 @@ def emit_graph(emitter: DatahubRestEmitter, *, dry_run: bool = False) -> Ingesti
         except Exception as exc:
             result.failures.append(f"{asset.name} UpstreamLineage: {exc}")
 
+    # The datajob bridge that makes the ML half of the chain traversable. Last,
+    # for the same reason lineage follows entities: it references the feature
+    # table, which must already exist.
+    for mcp in _ml_bridge_mcps(graph):
+        if dry_run:
+            result.bridge_aspects += 1
+            continue
+        try:
+            emitter.emit(mcp)
+            result.bridge_aspects += 1
+        except Exception as exc:
+            result.failures.append(f"ml-bridge {mcp.entityUrn}: {exc}")
+
     return result
 
 
@@ -297,7 +529,8 @@ def main() -> int:
 
     label = "WOULD EMIT" if args.dry_run else "EMITTED"
     print(f"{label}: {result.entities} entities, {result.aspects} aspects, "
-          f"{result.lineage_edges} lineage edges")
+          f"{result.lineage_edges} lineage edges, "
+          f"{result.bridge_aspects} ml-bridge aspects")
     if result.failures:
         print(f"FAILURES ({len(result.failures)}):", file=sys.stderr)
         for failure in result.failures:
