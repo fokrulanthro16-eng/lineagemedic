@@ -119,11 +119,11 @@ system lying, are in [`docs/JUDGE_TEST_GUIDE.md`](JUDGE_TEST_GUIDE.md).
 
 | Gate | Result |
 |------|--------|
-| `pytest` | 78 passed |
-| Live DataHub integration tests | 14 passed against a running instance |
+| `pytest` | 96 passed |
+| Live DataHub integration tests | 15 passed against a running instance |
 | `vitest` | 28 passed across 4 files |
 | `ruff check .` | clean |
-| `mypy` | clean, 30 source files |
+| `mypy` | clean, 31 source files |
 | API contract | frontend types in sync with the OpenAPI schema |
 | Committed examples | regenerate byte-for-byte from real workflow runs |
 

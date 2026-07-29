@@ -398,3 +398,57 @@ def test_writeback_preserves_tags_it_did_not_add(
     assert {"healthcare", "phi", "silver"} <= tags, (
         "pre-existing tags were lost by the writeback"
     )
+
+
+def test_reingest_preserves_incident_tags(
+    writeback_adapter: DataHubWritebackAdapter,
+    adapter: DataHubMetadataAdapter,
+) -> None:
+    """Re-running the ingestion must not erase a previous writeback's tags.
+
+    The mirror of :func:`test_writeback_preserves_tags_it_did_not_add`, and the
+    direction that was actually broken. ``globalTags`` is a whole-aspect
+    replace, so ingestion emitting only the fixture's tags deleted the incident
+    tags a writeback had attached -- destroying the evidence the writeback
+    exists to produce.
+
+    This drives the real ``emit_graph`` against the live instance rather than
+    testing the helper in isolation, because the original defect was not a wrong
+    merge but a missing call to one.
+    """
+    import importlib.util
+    import sys
+    from pathlib import Path
+
+    probe_tag = "lineagemedic-reingest-probe"
+    writeback_adapter.write_incident_metadata(
+        target_urns=[URN_STAGING_PATIENTS],
+        tags=[probe_tag],
+        note="Re-ingest preservation check.",
+        incident_id="LM-REINGEST",
+        approved=True,
+    )
+    assert probe_tag in set(adapter.get_asset(URN_STAGING_PATIENTS).tags), (
+        "precondition failed: the probe tag was never written"
+    )
+
+    path = Path(__file__).resolve().parent.parent / "scripts" / "ingest_lineage.py"
+    spec = importlib.util.spec_from_file_location("ingest_lineage_live", path)
+    assert spec and spec.loader
+    ingest = importlib.util.module_from_spec(spec)
+    # Registered before execution because ``IngestionResult`` is a dataclass:
+    # resolving its annotations looks the module up in ``sys.modules``, and a
+    # module that is not there yet fails with a bare AttributeError.
+    sys.modules["ingest_lineage_live"] = ingest
+    spec.loader.exec_module(ingest)
+
+    emitter = ingest.DatahubRestEmitter(gms_server=GMS_URL, token=TOKEN or None)
+    result = ingest.emit_graph(emitter, gms_url=GMS_URL)
+    assert not result.failures, f"ingestion reported failures: {result.failures}"
+
+    tags = set(adapter.get_asset(URN_STAGING_PATIENTS).tags)
+
+    assert probe_tag in tags, "re-ingest erased the incident tag written earlier"
+    assert {"healthcare", "phi", "silver"} <= tags, (
+        "re-ingest dropped the fixture's own tags"
+    )

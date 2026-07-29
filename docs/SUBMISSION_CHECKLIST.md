@@ -51,14 +51,15 @@ observability
 
 ## Quality gates — last full run
 
-Run on 2026-07-29, after the final change to `scripts/export_examples.py`:
+Run on 2026-07-29, after the `globalTags` merge fix:
 
 | Gate | Command | Result |
 |------|---------|--------|
-| Python tests | `pytest` | 78 passed |
+| Python tests | `pytest` | 96 passed (81 passed, 15 skipped without a live DataHub) |
+| Live DataHub integration tests | `pytest tests/test_datahub_integration.py` | 15 passed |
 | Frontend tests | `npm test -- --run` | 28 passed, 4 files |
 | Lint | `ruff check .` | All checks passed |
-| Types | `mypy packages/lineagemedic/src apps/api scripts` | clean, 30 files |
+| Types | `mypy packages/lineagemedic/src apps/api scripts` | clean, 31 files |
 | API contract | `scripts\check_api_types.ps1` | in sync |
 | End-to-end demo | `scripts\demo.ps1` | critical / warning / healthy, no `MISMATCH` |
 | Example reproducibility | `scripts\export_examples.py` then `git diff examples\` | no diff |
@@ -95,11 +96,28 @@ Carried forward as standing constraints on this repository:
 - The `readmission_risk_model → model_predictions` hop is rejected by DataHub
   v1.6.0 in both directions; the model is connected via
   `trainingJobs`/`downstreamJobs` instead.
-- Re-running `scripts/ingest_lineage.py` replaces the `globalTags` aspect
-  wholesale, which clears incident tags written by a previous writeback.
-  `globalTags` is a whole-aspect replace in DataHub, not an append.
-- Fixture mode and live mode report different blast-radius counts, because the
-  live catalog contains a richer graph than the bundled fixture.
+
+### Fixed since the first polish
+
+- **Re-ingest no longer erases incident tags.** `globalTags` is a whole-aspect
+  replace in DataHub, so `scripts/ingest_lineage.py` emitting the fixture's tags
+  alone deleted everything else on the entity — including the tags a previous
+  writeback had attached. Ingestion now reads the current tags and unions before
+  emitting, sharing that logic with the writeback adapter via
+  `lineagemedic.adapters.tags`. A tag read that fails skips the asset rather
+  than overwriting it, because losing an update is recoverable and silently
+  destroying another team's tags is not. Covered by `tests/test_tag_merge.py`
+  (17 tests, no DataHub required) and
+  `test_reingest_preserves_incident_tags` in the live suite, which performs a
+  real writeback, a real full re-ingest, and reads the tags back.
+
+- **The fixture/live asset-count difference is documented, not a defect.** The
+  critical scenario reports 5 affected in fixture mode and 8 live, with the same
+  2 cleared. Same traversal, different graph sizes: the live catalog carries
+  three extra bridge entities that ingestion must create because DataHub v1.6.0
+  cannot traverse `mlModel`/`mlModelDeployment` directly. Both derive `critical`
+  by the same rule. Explained in the README's known-limitations section and in
+  `ARCHITECTURE.md` under "Why the two modes report different asset counts".
 
 ## Before pushing
 

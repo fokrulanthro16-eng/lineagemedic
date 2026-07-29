@@ -33,6 +33,14 @@ Run against a running quickstart::
 
 The script is idempotent: DataHub aspects are upserts keyed by URN, so running
 it twice converges on the same state rather than duplicating anything.
+
+Idempotent does not mean non-destructive, and one aspect needs care.
+``globalTags`` is a whole-aspect *replace*, so emitting the fixture's tags alone
+deletes every other tag on the entity -- including incident tags written by a
+previous LineageMedic writeback. Tags are therefore read and merged before
+emission; see :func:`_global_tags` and
+:mod:`lineagemedic.adapters.tags`. A tag read that fails skips that asset rather
+than overwriting it.
 """
 
 from __future__ import annotations
@@ -68,6 +76,7 @@ from datahub.metadata.schema_classes import (
     UpstreamLineageClass,
 )
 
+from lineagemedic.adapters.tags import TagReadError, read_tag_urns, union_tags
 from lineagemedic.fixtures.graph import (
     PLATFORM_MLFLOW,
     PLATFORM_SAGEMAKER,
@@ -152,11 +161,21 @@ def _ownership(owners: list[Owner]) -> OwnershipClass:
     )
 
 
-def _global_tags(tags: list[str]) -> GlobalTagsClass:
-    """Translate plain tag strings into DataHub tag associations."""
-    return GlobalTagsClass(
-        tags=[TagAssociationClass(tag=make_tag_urn(t)) for t in tags]
-    )
+def _global_tags(tags: list[str], existing: list[str] | None = None) -> GlobalTagsClass:
+    """Translate plain tag strings into DataHub tag associations.
+
+    ``existing`` is the entity's current tag URNs, and the result is the *union*
+    of the two. This matters because ``globalTags`` is a whole-aspect replace in
+    DataHub: emitting only the fixture's tags deletes everything else the entity
+    carries. Re-running this script used to erase the incident tags a previous
+    LineageMedic writeback had attached, which destroyed the very evidence the
+    writeback exists to produce.
+
+    Passing ``existing=None`` means "no merge" and is used only by ``--dry-run``,
+    which contacts nothing and so cannot know the current state.
+    """
+    merged = union_tags(existing or [], [make_tag_urn(t) for t in tags])
+    return GlobalTagsClass(tags=[TagAssociationClass(tag=t) for t in merged])
 
 
 def _schema_metadata(asset: Asset) -> SchemaMetadataClass:
@@ -245,8 +264,12 @@ def _properties_aspect(asset: Asset) -> object:
     )
 
 
-def _aspects_for(asset: Asset) -> list[object]:
+def _aspects_for(asset: Asset, existing_tags: list[str] | None = None) -> list[object]:
     """Every aspect this asset should carry in DataHub.
+
+    ``existing_tags`` is the entity's current tag URNs, unioned into the emitted
+    ``globalTags`` so ingestion never deletes tags it did not author. The caller
+    reads them, because this function is otherwise pure.
 
     Two aspects are conditional. Schema metadata is emitted only for assets that
     actually declare columns, because an empty schema on an ML model would
@@ -257,7 +280,7 @@ def _aspects_for(asset: Asset) -> list[object]:
     aspects: list[object] = [
         _properties_aspect(asset),
         _ownership(asset.owners),
-        _global_tags(asset.tags),
+        _global_tags(asset.tags, existing_tags),
     ]
     subtypes = _SUBTYPES.get(asset.kind)
     if subtypes is not None:
@@ -291,8 +314,12 @@ def _ml_bridge_mcps(graph: object) -> list[MetadataChangeProposalWrapper]:
     ---------------
     LineageMedic's severity reasoning depends on a blast radius that reaches the
     deployed model and the production endpoint. In DataHub v1.6.0, ``mlModel``
-    and ``mlModelDeployment`` cannot participate in a lineage traversal at all.
-    That was established against the running instance, not assumed:
+    and ``mlModelDeployment`` cannot carry ``upstreamLineage`` and are not
+    reachable through ``searchAcrossLineage``, which follows only
+    ``DownstreamOf``. They are not wholly outside the graph -- the
+    ``trainingJobs``/``downstreamJobs`` edges emitted below are traversed by
+    ``entity.lineage``, which is what the DataHub UI renders. All of this was
+    established against the running instance, not assumed:
 
     * ``upstreamLineage`` on ``mlModel`` is rejected with HTTP 422, "Unknown
       aspect upstreamLineage for entity mlModel".
@@ -507,14 +534,35 @@ def _ml_bridge_mcps(graph: object) -> list[MetadataChangeProposalWrapper]:
     ]
 
 
-def emit_graph(emitter: DatahubRestEmitter, *, dry_run: bool = False) -> IngestionResult:
-    """Emit every asset and lineage edge, reporting exactly what succeeded."""
+def emit_graph(
+    emitter: DatahubRestEmitter, *, dry_run: bool = False, gms_url: str = ""
+) -> IngestionResult:
+    """Emit every asset and lineage edge, reporting exactly what succeeded.
+
+    ``gms_url`` is used to read each entity's current tags so ``globalTags`` can
+    be merged rather than replaced. It is separate from the emitter because the
+    SDK's emitter exposes no read path.
+    """
     graph = build_graph(source=DataSource.FIXTURE)
     result = IngestionResult()
 
     for asset in graph.assets:
         entity_type = _entity_type(asset)
-        for aspect in _aspects_for(asset):
+
+        # Read before write: globalTags is a whole-aspect replace, so emitting
+        # without the current tags deletes them. A read failure skips this
+        # asset entirely rather than falling back to an overwrite -- losing an
+        # update is recoverable, silently destroying another team's tags (or a
+        # previous incident writeback) is not.
+        existing_tags: list[str] | None = None
+        if not dry_run:
+            try:
+                existing_tags = read_tag_urns(gms_url, asset.urn)
+            except TagReadError as exc:
+                result.failures.append(f"{asset.name} GlobalTags: {exc}")
+                continue
+
+        for aspect in _aspects_for(asset, existing_tags):
             mcp = MetadataChangeProposalWrapper(
                 entityType=entity_type,
                 entityUrn=asset.urn,
@@ -588,7 +636,7 @@ def main() -> int:
             print(f"FAILED: cannot reach DataHub GMS at {args.gms}: {exc}", file=sys.stderr)
             return 2
 
-    result = emit_graph(emitter, dry_run=args.dry_run)
+    result = emit_graph(emitter, dry_run=args.dry_run, gms_url=args.gms)
 
     label = "WOULD EMIT" if args.dry_run else "EMITTED"
     print(f"{label}: {result.entities} entities, {result.aspects} aspects, "

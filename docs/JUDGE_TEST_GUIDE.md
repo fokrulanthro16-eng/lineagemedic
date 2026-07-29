@@ -67,13 +67,13 @@ Expected, and what these produced on 2026-07-29:
 
 | Gate | Result |
 |------|--------|
-| `pytest` | 78 passed |
+| `pytest` | 96 passed |
 | `vitest` | 28 passed across 4 files |
 | `ruff check .` | All checks passed |
-| `mypy` | Success: no issues found in 30 source files |
+| `mypy` | Success: no issues found in 31 source files |
 
-The 78 includes 14 DataHub integration tests, which **skip themselves** when no
-DataHub is reachable. With Docker down you will see them reported as skipped;
+The 96 includes 15 DataHub integration tests, which **skip themselves** when no
+DataHub is reachable. With Docker down you will see `81 passed, 15 skipped`;
 that is correct behaviour, not a failure.
 
 ### Verify the API contract cannot drift
@@ -198,11 +198,12 @@ $env:LINEAGEMEDIC_MODE = "live"; $env:DATAHUB_GMS_URL = "http://localhost:8080"
 .venv\Scripts\python.exe -m pytest tests\test_datahub_integration.py
 ```
 
-14 tests, all passing against a running instance. They cover what only a live
+15 tests, all passing against a running instance. They cover what only a live
 catalog can prove: that lineage traverses the full chain, that the blast radius
 reaches an ML model and a production endpoint *by subtype*, that an unapproved
-writeback mutates nothing, and that an approved one is verified by reading the
-metadata back.
+writeback mutates nothing, that an approved one is verified by reading the
+metadata back, and that re-running the ingestion does not erase the incident
+tags a previous writeback attached.
 
 ## Part 3 — trying to catch it lying
 

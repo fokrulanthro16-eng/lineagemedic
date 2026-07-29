@@ -29,22 +29,17 @@ import logging
 from types import SimpleNamespace
 from typing import TYPE_CHECKING, Any
 
-import httpx
-
+from lineagemedic.adapters.tags import TagReadError, read_tag_urns, union_tags
 from lineagemedic.models import DataSource, WritebackReceipt, WritebackStatus
 
 if TYPE_CHECKING:  # pragma: no cover - typing only
     from datahub.emitter.rest_emitter import DatahubRestEmitter
 
 
-class TagReadError(RuntimeError):
-    """Raised when an entity's current tags cannot be established.
-
-    Because ``globalTags`` is replaced wholesale rather than appended to, a
-    write that proceeds without knowing the current tags will delete them. This
-    error exists so that an unreadable current state stops the write instead of
-    silently narrowing it.
-    """
+#: ``TagReadError`` is re-exported because it moved to
+#: :mod:`lineagemedic.adapters.tags` when ``scripts/ingest_lineage.py`` needed
+#: the same read-then-merge behaviour. Importers of this module keep working.
+__all__ = ["DataHubSdkUnavailableError", "DataHubWritebackAdapter", "TagReadError"]
 
 
 class DataHubSdkUnavailableError(RuntimeError):
@@ -170,57 +165,13 @@ class DataHubWritebackAdapter:
         and a live run destroyed the healthcare/phi/silver tags on
         ``staging_patients``.
 
-        The failure was silent for a second reason worth recording: a GraphQL
-        *validation* error is returned as HTTP 200 with an ``errors`` array, so
-        ``raise_for_status()`` did not fire and a structurally broken query was
-        indistinguishable from an asset with no tags. Both conditions now raise.
+        The query and its failure handling live in
+        :mod:`lineagemedic.adapters.tags` because ``scripts/ingest_lineage.py``
+        must merge on exactly the same terms.
         """
-        # ``MLModelDeployment`` is not a type in DataHub v1.6.0's GraphQL schema
-        # and naming it fails the whole query at validation. Aliases keep the
-        # two remaining fragments from conflicting on ``tags``' list shape.
-        query = """
-        query tags($urn: String!) {
-          entity(urn: $urn) { ... on Dataset { dsTags: tags { tags { tag { urn } } } }
-                              ... on MLModel { mlTags: tags { tags { tag { urn } } } }
-                              ... on DataJob { jobTags: tags { tags { tag { urn } } } } }
-        }
-        """
-        try:
-            response = httpx.post(
-                f"{self._gms_url}/api/graphql",
-                json={"query": query, "variables": {"urn": urn}},
-                headers=self._headers(),
-                timeout=self._timeout,
-            )
-            response.raise_for_status()
-            payload = response.json()
-        except (httpx.HTTPError, ValueError) as exc:
-            raise TagReadError(
-                f"Could not read existing tags for {urn}, so a safe merge is "
-                f"impossible and the write was not attempted: {exc}"
-            ) from exc
-
-        if payload.get("errors"):
-            # HTTP 200 with an errors array - see this method's docstring.
-            messages = "; ".join(e.get("message", "?") for e in payload["errors"])
-            raise TagReadError(
-                f"Could not read existing tags for {urn}, so a safe merge is "
-                f"impossible and the write was not attempted: {messages}"
-            )
-
-        entity = (payload.get("data") or {}).get("entity") or {}
-        wrapper = (
-            entity.get("dsTags")
-            or entity.get("mlTags")
-            or entity.get("jobTags")
-            or {}
+        return read_tag_urns(
+            self._gms_url, urn, headers=self._headers(), timeout=self._timeout
         )
-        tag_urns: list[str] = []
-        for association in wrapper.get("tags") or []:
-            tag_urn = (association.get("tag") or {}).get("urn")
-            if tag_urn:
-                tag_urns.append(str(tag_urn))
-        return tag_urns
 
     def verify_tags(self, urn: str, expected_tags: list[str]) -> tuple[bool, list[str]]:
         """Read an entity back and report which expected tags are really present.
@@ -356,12 +307,9 @@ class DataHubWritebackAdapter:
 
     def _merge_tags(self, urn: str, tags: list[str]) -> Any:
         """Union the incident tags with whatever the asset already carries."""
-        existing = self._existing_tags(urn)
-        incident = [self._sdk.make_tag_urn(t) for t in tags]
-        merged: list[str] = []
-        for tag_urn in [*existing, *incident]:
-            if tag_urn not in merged:
-                merged.append(tag_urn)
+        merged = union_tags(
+            self._existing_tags(urn), [self._sdk.make_tag_urn(t) for t in tags]
+        )
         return self._sdk.GlobalTagsClass(
             tags=[self._sdk.TagAssociationClass(tag=t) for t in merged]
         )

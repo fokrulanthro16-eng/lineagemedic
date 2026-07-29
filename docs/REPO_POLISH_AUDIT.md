@@ -7,6 +7,11 @@ API on `:8000` in live mode, and the dashboard on `:5173`.
 Every number below was measured by running the command named beside it. Nothing
 here is estimated.
 
+> This is a dated snapshot of that audit, kept as a record rather than updated
+> in place. The counts below (78 tests, 30 typed source files) were correct at
+> commit `96978e5`. Work done since has changed them — see
+> [SUBMISSION_CHECKLIST.md](SUBMISSION_CHECKLIST.md) for the current figures.
+
 ## What already existed and is worth keeping
 
 | Area | State | Evidence |

@@ -368,11 +368,11 @@ Current state, all measured by running the commands above:
 
 | Gate | Result |
 |------|--------|
-| `pytest` | 78 passed |
-| — of which live DataHub integration tests | 14 passed |
+| `pytest` | 96 passed (81 without a live DataHub, 15 skipped) |
+| — of which live DataHub integration tests | 15 passed |
 | `vitest` | 28 passed across 4 files |
 | `ruff check .` | clean |
-| `mypy` | clean, 30 source files |
+| `mypy` | clean, 31 source files |
 | `check_api_types.ps1` | frontend types in sync |
 
 The integration tests skip themselves when no DataHub is reachable, so the
@@ -421,6 +421,17 @@ Stated plainly rather than omitted:
   rejected with HTTP 422, for the reasons above. Six of the seven hops in the
   demo chain are live, and the model is connected through
   `trainingJobs`/`downstreamJobs`, which the DataHub UI traverses.
+- **The blast radius counts differ between the two modes, and should.** The
+  critical scenario reports **5 affected** in fixture mode and **8 affected**
+  live, with the same 2 assets cleared in both. This is not a discrepancy in the
+  reasoning — it is the same traversal over two graphs of different sizes. The
+  fixture collapses each ML step into the artifact it produces (7 assets); the
+  live catalog additionally contains the three bridge entities ingestion must
+  create because DataHub v1.6.0 cannot traverse `mlModel`/`mlModelDeployment`
+  directly — the two `dataJob`s and their output datasets. Both derive
+  `critical`, by the same rule, because both reach a deployed model and a
+  production endpoint. `examples/` is generated in fixture mode, so its counts
+  are the smaller pair; the screenshots are live, so they show the larger.
 - **Quality checks run against SQLite.** Warehouse-specific SQL dialects are not
   abstracted.
 - **Lineage traversal assumes a DAG.** The frontend's depth computation is

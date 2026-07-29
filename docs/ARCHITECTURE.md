@@ -116,6 +116,26 @@ the derivation. It exists so `scripts/demo.ps1` can compare expectation against
 outcome and print `MISMATCH` when they disagree, and so the test suite can
 assert the derivation still behaves.
 
+### Why the two modes report different asset counts
+
+The critical scenario reports 5 affected assets in fixture mode and 8 live, with
+the same 2 cleared in both. The reasoning is identical; the graphs are not.
+
+The fixture graph holds 7 assets and collapses each ML step into the artifact it
+produces — `readmission_risk_model` and `production_readmission_endpoint` stand
+in for the jobs that build them. The live catalog cannot do that, because
+DataHub v1.6.0 will not return `mlModel` or `mlModelDeployment` from a lineage
+traversal (see the constraints section below). Ingestion therefore emits three
+additional bridge entities that *are* traversable: the `train_readmission_model`
+and `serve_readmission_endpoint` datajobs, and their output datasets
+`model_predictions` and `endpoint_predictions`.
+
+So the live blast radius legitimately contains more nodes representing the same
+real pipeline. Both modes derive `critical` by the same rule — both reach a
+deployed model and a production endpoint — and both clear exactly the billing
+branch. A judge comparing `examples/incident-critical.json` (fixture, 5) against
+the screenshots (live, 8) is seeing this, not an inconsistency.
+
 ## The approval gate
 
 Three independent layers refuse an unapproved writeback:
