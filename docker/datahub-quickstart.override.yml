@@ -1,4 +1,8 @@
-# Compose override for the official DataHub v1.5.0.6 quickstart file.
+# Compose override for the official DataHub quickstart compose file.
+#
+# Note the quickstart file defaults DATAHUB_VERSION to ``head``, so the images
+# it pulls are not the version named in the quickstart mapping. The stack this
+# was developed and verified against reports itself as v1.6.0rc1.
 #
 # Why this file exists
 # --------------------
@@ -33,6 +37,25 @@
 #       -f docker/datahub-quickstart.override.yml up -d
 
 services:
+  datahub-frontend-react:
+    environment:
+      # The published compose file sets DATAHUB_SECRET=YouKnowNothing, which is
+      # 14 characters / 112 bits. Play refuses to start when the application
+      # secret is shorter than the 256 bits its HS256 session signing requires,
+      # so the frontend crashes on boot with:
+      #
+      #     Configuration error: The application secret is too short and does
+      #     not have the recommended amount of entropy for algorithm HS256
+      #     Current application secret bits: 112, minimal required bits: 256
+      #
+      # The container exits 255 and nothing listens on :9002, so the DataHub UI
+      # is unreachable while GMS itself is perfectly healthy. This is a 48-byte
+      # urlsafe random value (384 bits), comfortably over the threshold.
+      #
+      # Same caveat as the keys below: a LOCAL DEVELOPMENT DEFAULT for a stack
+      # bound to localhost. Generate a fresh secret for any real deployment.
+      - DATAHUB_SECRET=y7xzWzUF3drnM7C-wMF06lTqQ_g7aohj3zypvg8nZfdIlDYFxHyREeDrKc0ZBrHu
+
   datahub-upgrade:
     environment:
       # Consumed by DataHubTokenServiceFactory during Spring context startup.

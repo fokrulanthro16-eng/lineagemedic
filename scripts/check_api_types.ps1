@@ -43,13 +43,55 @@ try {
     Pop-Location
 }
 
+<#
+    Run git and return only its exit code, discarding whatever it wrote to
+    stderr.
+
+    This exists to work around Windows PowerShell, not to weaken the check.
+    `.gitattributes` normalises the generated files to LF, while a Windows
+    checkout with core.autocrlf=true writes them back as CRLF, so git emits
+
+        warning: in the working copy of 'scripts/openapi.json',
+        CRLF will be replaced by LF the next time Git touches it
+
+    on **stderr** whenever it inspects a file that was just regenerated. Windows
+    PowerShell 5.1 turns any native-command stderr output into a
+    NativeCommandError, which failed this script even when the contract was
+    perfectly in sync. An in-process `2>$null` is not enough - 5.1 still wraps
+    each stderr line in an ErrorRecord - so stderr is redirected at the process
+    level instead.
+
+    Only the advisory text is discarded. The value returned is git's own exit
+    code, so a genuinely stale artifact still fails exactly as before.
+#>
+function Invoke-GitExitCode {
+    param([string[]]$GitArgs)
+
+    $errFile = [System.IO.Path]::GetTempFileName()
+    try {
+        $p = Start-Process -FilePath 'git' -ArgumentList $GitArgs `
+            -NoNewWindow -Wait -PassThru -RedirectStandardError $errFile
+        return $p.ExitCode
+    } finally {
+        Remove-Item $errFile -Force -ErrorAction SilentlyContinue
+    }
+}
+
 # --quiet exits non-zero when the working tree differs from the index/HEAD for
 # these paths, which is precisely "the committed artifact is stale".
-& git -C $repo diff --quiet -- scripts/openapi.json apps/web/src/api/schema.ts
-if ($LASTEXITCODE -ne 0) {
+$diffExit = Invoke-GitExitCode @(
+    '-C', $repo, 'diff', '--quiet', '--',
+    'scripts/openapi.json', 'apps/web/src/api/schema.ts'
+)
+if ($diffExit -ne 0) {
     Write-Host ''
     Write-Host 'The generated API contract is out of date:' -ForegroundColor Red
-    & git -C $repo --no-pager diff --stat -- scripts/openapi.json apps/web/src/api/schema.ts
+    # The diff itself must reach the operator, so this captures stdout rather
+    # than discarding it. cmd.exe drops stderr before PowerShell can turn the
+    # CRLF advisory into a NativeCommandError that would mask the very diff
+    # this failure path exists to show.
+    $stat = & cmd.exe /c "git -C ""$repo"" --no-pager diff --stat -- scripts/openapi.json apps/web/src/api/schema.ts 2>NUL"
+    $stat | ForEach-Object { Write-Host $_ }
     Write-Host ''
     Write-Host 'Commit the regenerated files above to bring the frontend back in step.' -ForegroundColor Yellow
     exit 1
