@@ -67,10 +67,16 @@ Expected, and what these produced on 2026-07-29:
 
 | Gate | Result |
 |------|--------|
+| `ruff` | All checks passed |
+| `mypy` | Success: no issues found in 36 source files |
 | `pytest` | 96 passed |
+| `tsc` | passed |
 | `vitest` | 28 passed across 4 files |
-| `ruff check .` | All checks passed |
-| `mypy` | Success: no issues found in 31 source files |
+
+`test.ps1` type-checks the tests as well as the source, which is why it reports
+36 files. Running mypy over the shipped code alone —
+`mypy packages/lineagemedic/src apps/api scripts`, the form quoted elsewhere in
+this repository — reports 31. Both are clean; they cover different sets.
 
 The 96 includes 15 DataHub integration tests, which **skip themselves** when no
 DataHub is reachable. With Docker down you will see `81 passed, 15 skipped`;

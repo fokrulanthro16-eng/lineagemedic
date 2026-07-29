@@ -372,7 +372,7 @@ Current state, all measured by running the commands above:
 | — of which live DataHub integration tests | 15 passed |
 | `vitest` | 28 passed across 4 files |
 | `ruff check .` | clean |
-| `mypy` | clean, 31 source files |
+| `mypy` | clean, 31 source files (36 when `test.ps1` includes the tests) |
 | `check_api_types.ps1` | frontend types in sync |
 
 The integration tests skip themselves when no DataHub is reachable, so the
