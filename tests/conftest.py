@@ -24,9 +24,16 @@ from lineagemedic.workflow import Workflow
 
 @pytest.fixture(scope="session")
 def db_path(tmp_path_factory: pytest.TempPathFactory) -> Path:
-    """A freshly seeded healthcare database, shared across the session."""
+    """A freshly seeded healthcare database, shared across the session.
+
+    The clock is pinned to :data:`REFERENCE_NOW` and the ``now`` fixture hands
+    the Quality Agent the same instant, so freshness deltas are exact rather
+    than dependent on when the suite happens to run. ``build_database`` itself
+    defaults to wall-clock, which is what keeps the demo's HEALTHY control from
+    ageing into a warning.
+    """
     target = tmp_path_factory.mktemp("warehouse") / "healthcare.db"
-    return build_database(target)
+    return build_database(target, reference_now=REFERENCE_NOW)
 
 
 @pytest.fixture()

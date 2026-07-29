@@ -36,8 +36,23 @@ SEED = 20260728
 TOTAL_PATIENTS = 500
 BILLING_ROWS = 300
 
-# Reference "now" for the generated data. Fixed rather than wall-clock so
-# freshness deltas stay stable across runs and CI.
+# Reference "now" for the generated data, used as the default only by tests and
+# by anything that needs a fixed clock. Freshness deltas are expressed relative
+# to whatever reference the caller passes to :func:`build_database`, so the
+# generated data is deterministic for a given reference.
+#
+# ``build_database`` deliberately defaults to wall-clock rather than to this
+# constant. Every timestamp below is written as an offset from the reference,
+# but the freshness checks compare against the real clock at diagnosis time, so
+# seeding from a frozen reference means the data ages in real time: roughly 23
+# hours after the reference, ``billing_summary`` breaches its 24-hour SLA and
+# the HEALTHY control scenario starts reporting ``warning``. That is a genuine
+# severity mismatch, not a demo glitch, and it would misfire for anyone running
+# the demo more than a day after the data was seeded.
+#
+# Tests pin the clock explicitly - ``tests/conftest.py`` passes this constant to
+# both ``build_database`` and the Quality Agent - so their assertions stay exact
+# while the demo stays fresh.
 REFERENCE_NOW = datetime(2026, 7, 28, 12, 0, 0, tzinfo=UTC)
 
 # Planted-defect volumes, asserted directly by the Quality Agent tests.
@@ -114,29 +129,40 @@ def _iso(dt: datetime) -> str:
     return dt.replace(microsecond=0).isoformat()
 
 
-def build_database(db_path: Path) -> Path:
+def build_database(db_path: Path, reference_now: datetime | None = None) -> Path:
     """Create (or recreate) the healthcare database at ``db_path``.
 
     Returns the path written. Safe to call repeatedly: the schema drops and
     recreates every table, so this doubles as the demo-reset primitive.
+
+    ``reference_now`` is the instant every generated timestamp is measured back
+    from, and defaults to the current time. Pass an explicit value to pin the
+    clock - tests do, so their row counts and freshness deltas stay exact.
+
+    The default is wall-clock rather than :data:`REFERENCE_NOW` on purpose; see
+    that constant for what seeding from a frozen reference does to the HEALTHY
+    control scenario once a day has passed.
     """
+    reference = reference_now or datetime.now(UTC)
     db_path.parent.mkdir(parents=True, exist_ok=True)
     rng = random.Random(SEED)
 
     conn = sqlite3.connect(db_path)
     try:
         conn.executescript(SCHEMA)
-        _seed_patient_branch(conn, rng)
-        _seed_billing_branch(conn, rng)
+        _seed_patient_branch(conn, rng, reference)
+        _seed_billing_branch(conn, rng, reference)
         conn.commit()
     finally:
         conn.close()
     return db_path
 
 
-def _seed_patient_branch(conn: sqlite3.Connection, rng: random.Random) -> None:
+def _seed_patient_branch(
+    conn: sqlite3.Connection, rng: random.Random, reference_now: datetime
+) -> None:
     """Populate raw -> staging -> features, planting the defects on the way."""
-    ingested = _iso(REFERENCE_NOW - timedelta(hours=6))
+    ingested = _iso(reference_now - timedelta(hours=6))
 
     # Choose which rows carry planted defects. Disjoint sets so each check
     # measures one defect cleanly and the counts stay independently assertable.
@@ -157,7 +183,7 @@ def _seed_patient_branch(conn: sqlite3.Connection, rng: random.Random) -> None:
         else:
             age = rng.randint(18, 96)
 
-        admission = None if pid in null_admission_ids else REFERENCE_NOW - timedelta(
+        admission = None if pid in null_admission_ids else reference_now - timedelta(
             days=rng.randint(3, 240)
         )
         los = rng.randint(1, 21)
@@ -183,7 +209,7 @@ def _seed_patient_branch(conn: sqlite3.Connection, rng: random.Random) -> None:
     # date but performs no range validation on age, so every invalid age flows
     # straight through to the feature pipeline. This is the defect the Root
     # Cause Agent is expected to localise to raw_patients.age.
-    staged = _iso(REFERENCE_NOW - timedelta(hours=STAGING_STALENESS_HOURS))
+    staged = _iso(reference_now - timedelta(hours=STAGING_STALENESS_HOURS))
     staging_rows = []
     for pid, row_age, row_sex, adm_iso, dis_iso, row_dx, _ in raw_rows:
         if adm_iso is None or dis_iso is None:
@@ -197,7 +223,7 @@ def _seed_patient_branch(conn: sqlite3.Connection, rng: random.Random) -> None:
 
     # Feature pipeline: buckets age without validating it, so invalid ages
     # become an "unknown" bucket that the model silently consumes.
-    computed = _iso(REFERENCE_NOW - timedelta(hours=STAGING_STALENESS_HOURS - 2))
+    computed = _iso(reference_now - timedelta(hours=STAGING_STALENESS_HOURS - 2))
     feature_rows = []
     for pid, age, _sex, _adm, los, dx, _ts in staging_rows:
         feature_rows.append(
@@ -229,10 +255,12 @@ def _age_bucket(age: int | None) -> str:
     return "75+"
 
 
-def _seed_billing_branch(conn: sqlite3.Connection, rng: random.Random) -> None:
+def _seed_billing_branch(
+    conn: sqlite3.Connection, rng: random.Random, reference_now: datetime
+) -> None:
     """Populate the billing control branch. No planted defects live here."""
-    ingested = _iso(REFERENCE_NOW - timedelta(hours=2))
-    refreshed = _iso(REFERENCE_NOW - timedelta(hours=1))
+    ingested = _iso(reference_now - timedelta(hours=2))
+    refreshed = _iso(reference_now - timedelta(hours=1))
 
     claims = []
     for i in range(BILLING_ROWS):
@@ -242,7 +270,7 @@ def _seed_billing_branch(conn: sqlite3.Connection, rng: random.Random) -> None:
                 f"PT{rng.randint(0, TOTAL_PATIENTS - 1):05d}",
                 rng.randint(5_00, 48_000_00),
                 rng.choice(_PAYERS),
-                _iso(REFERENCE_NOW - timedelta(days=rng.randint(1, 90))),
+                _iso(reference_now - timedelta(days=rng.randint(1, 90))),
                 ingested,
             )
         )
