@@ -66,6 +66,14 @@ URN_ENDPOINT_PREDICTIONS = (
     "lineagemedic.endpoint_predictions,PROD)"
 )
 
+#: The training job itself. Used to prove a writeback works against a target
+#: that is not a dataset, since GMS rejects a proposal whose ``entityType``
+#: disagrees with its URN.
+URN_TRAIN_JOB = (
+    "urn:li:dataJob:(urn:li:dataFlow:"
+    "(mlflow,lineagemedic.readmission_pipeline,PROD),train_readmission_model)"
+)
+
 #: The patient chain as it exists in the live catalog, in dependency order.
 PATIENT_CHAIN = [
     URN_RAW_PATIENTS,
@@ -335,6 +343,35 @@ def test_approved_writeback_is_applied_and_verified_by_reading_back(
     # Independent confirmation through the read adapter.
     asset = adapter.get_asset(URN_STAGING_PATIENTS)
     assert tag in asset.tags
+
+
+def test_writeback_succeeds_on_a_non_dataset_target(
+    writeback_adapter: DataHubWritebackAdapter,
+) -> None:
+    """Datajob targets must be written with their own entity type.
+
+    The blast radius contains the bridge datajobs, so they are real writeback
+    targets. GMS rejects a proposal whose ``entityType`` disagrees with its URN,
+    and every other writeback test here targets a dataset, so a hardcoded
+    ``"dataset"`` failed only against a live instance and only for these URNs:
+    "entityType dataset does not match the entity type datajob".
+    """
+    incident_id = "LM-INTEGRATION-DATAJOB"
+    tag = "lineagemedic-datajob-probe"
+
+    receipt = writeback_adapter.write_incident_metadata(
+        target_urns=[URN_TRAIN_JOB],
+        tags=[tag],
+        note=f"Incident {incident_id}: datajob entity-type probe.",
+        incident_id=incident_id,
+        approved=True,
+    )
+
+    assert receipt.status is WritebackStatus.APPLIED, receipt.error
+    assert tag in receipt.tags_added
+
+    present, missing = writeback_adapter.verify_tags(URN_TRAIN_JOB, [tag])
+    assert present is True, f"tag never landed on the datajob; missing={missing}"
 
 
 def test_writeback_preserves_tags_it_did_not_add(

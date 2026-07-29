@@ -146,55 +146,64 @@ schema. Only that file should be edited by hand — `schema.ts` is overwritten.
 
 ## Fixture mode
 
-This build ships `adapters/fixture.py`, which serves committed metadata and
-reports `DataSource.FIXTURE`. Consequences, all deliberate:
+`adapters/fixture.py` serves committed metadata and reports
+`DataSource.FIXTURE`. It is the default mode and a clearly labelled fallback,
+never a mock of a successful integration — it is an accurate report of a system
+with no catalog attached. Consequences, all deliberate:
 
 - Diagnoses carry `context_source: "fixture"`.
 - Status endpoints report `datahub_connected: false`.
 - An approved writeback returns `skipped_fixture_mode`.
-- `LINEAGEMEDIC_MODE=live` returns **HTTP 501** rather than falling back to
-  fixtures while claiming to be live. This is covered by
-  `test_live_mode_refuses_rather_than_falling_back_to_fixtures`.
 
-Fixture mode is not a mock of a successful integration. It is an accurate
-report of a system with no catalog attached.
+The reverse guarantee holds in live mode: an unreachable DataHub returns **HTTP
+503** rather than falling back to fixtures while claiming to be live. Covered by
+`test_live_mode_refuses_rather_than_falling_back_to_fixtures`.
 
 ---
 
-## Files requiring real integration work
+## The live DataHub integration
 
-When DataHub and Docker are available, these are the files that change. Nothing
-else in the codebase should need to move, because the workflow depends only on
-the two protocols.
-
-### New files
+Implemented and verified against DataHub OSS v1.6.0.
 
 | File | Responsibility |
 |------|----------------|
-| `packages/lineagemedic/src/lineagemedic/adapters/datahub_mcp.py` | `MetadataPort` over the DataHub MCP Server: search, asset fetch, lineage traversal. Must record every call via `drain_calls()` and return `DataSource.LIVE_DATAHUB`. |
-| `packages/lineagemedic/src/lineagemedic/adapters/datahub_sdk.py` | `WritebackPort` over the DataHub Python SDK: emit incident metadata, tags, and documentation aspects. Returns a receipt describing what was actually emitted. |
-| `scripts/ingest_lineage.py` | Push the healthcare warehouse and the ML lineage chain into DataHub so the graph exists to be traversed. |
-| `docker-compose.yml` (or DataHub quickstart) | Local DataHub OSS. |
+| `adapters/datahub_mcp.py` | `MetadataPort` over DataHub's GraphQL API: search, asset fetch, lineage traversal. Records every call via `drain_calls()` and returns `DataSource.LIVE_DATAHUB`. |
+| `adapters/datahub_sdk.py` | `WritebackPort` over the DataHub Python SDK: emits tags and documentation aspects, then verifies them by reading them back. |
+| `scripts/ingest_lineage.py` | Pushes the healthcare warehouse and the ML lineage chain into DataHub so the graph exists to be traversed. |
+| `docker/datahub-quickstart.override.yml` | Compose override supplying the token-service signing key the DataHub CLI would normally inject. |
 | `tests/test_datahub_integration.py` | Integration tests, skipped when no DataHub is reachable. |
 
-### Modified files
+`build_workflow()` in `apps/api/lineagemedic_api/main.py` is the single switch
+point: it constructs either the fixture or the live adapters. Everything
+else — the seven agents, the models, the workflow orchestrator, the FastAPI
+routes, and the entire frontend — was unchanged by the integration, which is the
+outcome the port boundary was drawn to produce.
 
-| File | Change |
-|------|--------|
-| `apps/api/lineagemedic_api/main.py` | `build_workflow()` currently raises 501 for live mode. Replace that branch with construction of the live adapters. **This is the single switch point.** |
-| `apps/api/lineagemedic_api/config.py` | Already reads `DATAHUB_GMS_URL`, `DATAHUB_FRONTEND_URL`, `DATAHUB_GMS_TOKEN`, `MCP_SERVER_URL`, and `MCP_TIMEOUT_SECONDS`. **Note:** `MCP_SERVER_URL` defaults to `http://localhost:8000/mcp`, which collides with the API's own default port. Set it explicitly, or move one of the two, when the MCP server is actually running. |
-| `packages/lineagemedic/src/lineagemedic/agents/context.py` | Should need no logic change — it consumes `MetadataPort`. Verify URN construction matches what the live catalog returns. |
-| `README.md` | Remove the fixture-mode notice once live mode is genuinely reachable. |
+**Config note:** `MCP_SERVER_URL` defaults to `http://localhost:8000/mcp`, which
+collides with the API's own default port. Set it explicitly, or move one of the
+two, when an MCP server is actually running.
 
-### Explicitly unchanged
+### What the live catalog forced
 
-The seven agents, the models, the workflow orchestrator, the FastAPI routes,
-and the entire frontend. If connecting DataHub requires editing those, the port
-boundary was drawn in the wrong place.
+Three constraints of DataHub v1.6.0 were established by probing the running
+instance, and each is documented with its evidence at the point it shaped the
+code:
+
+- **ML entities cannot participate in lineage.** `upstreamLineage` on `mlModel`
+  is rejected 422; `MLModelDeployment` is not in the GraphQL schema at all. The
+  chain is therefore bridged by `dataJob` entities and their output datasets.
+  See `_ml_bridge_mcps` in `scripts/ingest_lineage.py`.
+- **DOWNSTREAM traversal does not follow dataset→job edges.** Those are
+  `Consumes`; only `DownstreamOf` is traversed. Each bridge output dataset
+  therefore also carries an `UpstreamLineage` aspect.
+- **Subtypes carry the domain meaning.** The bridge entities are a `DATA_JOB`
+  and a `DATASET` to DataHub. Only their emitted subtype marks one as a model
+  and the other as an endpoint, and severity is derived from those counts —
+  classifying on entity type alone silently downgraded a critical incident to a
+  warning. See `_kind_for` in `adapters/datahub_mcp.py`.
 
 ## Known limitations
 
-- Live DataHub adapters are not implemented in this build; live mode returns 501.
 - Quality checks run against SQLite. Warehouse-specific dialects are not abstracted.
 - Lineage traversal assumes a directed acyclic graph. `computeDepths` in the
   frontend is cycle-safe, but the backend's traversal assumes DataHub emits a DAG.

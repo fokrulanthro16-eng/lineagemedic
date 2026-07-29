@@ -106,11 +106,23 @@ _ENTITY_PATH = {
 
 
 def _entity_type_for(urn: str) -> str:
-    """Infer the DataHub entity type from a URN prefix."""
+    """Infer the DataHub entity type from a URN prefix.
+
+    ``dataJob`` is here because the ML half of the live lineage chain is bridged
+    by datajob entities (see ``_ml_bridge_mcps`` in ``scripts/ingest_lineage.py``),
+    so they legitimately appear in a blast radius and become writeback targets.
+    GMS rejects a proposal whose ``entityType`` disagrees with its URN, so
+    defaulting these to ``dataset`` failed the write with "entityType dataset
+    does not match the entity type datajob".
+    """
     if urn.startswith("urn:li:mlModelDeployment:"):
         return "mlModelDeployment"
     if urn.startswith("urn:li:mlModel:"):
         return "mlModel"
+    if urn.startswith("urn:li:dataJob:"):
+        return "dataJob"
+    if urn.startswith("urn:li:dataFlow:"):
+        return "dataFlow"
     return "dataset"
 
 
@@ -269,8 +281,9 @@ class DataHubWritebackAdapter:
                 )
                 aspects_written.append("globalTags")
 
-                # Documentation is only editable on datasets in DataHub's model;
-                # attaching it to a model or endpoint would be rejected.
+                # ``editableDatasetProperties`` is a dataset aspect. Emitting it
+                # against a model, endpoint, or datajob URN is rejected by GMS,
+                # so those targets receive the incident tag only.
                 if entity_type == "dataset":
                     self._emitter.emit(
                         self._sdk.MetadataChangeProposalWrapper(

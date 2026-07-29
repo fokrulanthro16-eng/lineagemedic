@@ -13,13 +13,22 @@ a real warehouse, walks the lineage graph to find where the defect entered and
 what it reaches, proposes a remediation plan, and — only after a human approves
 — writes its findings back to the catalog.
 
-> ### Demo Fixture Mode — DataHub integration not connected.
+> ### Two modes, and every response says which one produced it.
 >
-> This build runs against committed fixtures and a local SQLite warehouse. It
-> does **not** talk to a DataHub instance. Every response says so: each carries
-> `context_source: "fixture"`, the dashboard shows a persistent banner, and an
-> approved writeback returns `skipped_fixture_mode` rather than reporting a
-> success that never happened. See [Honesty guarantees](#honesty-guarantees).
+> **Live mode** (`LINEAGEMEDIC_MODE=live`) talks to a real DataHub OSS instance:
+> it reads lineage and metadata over DataHub's GraphQL API and, once a human
+> approves, writes tags and descriptions back and verifies them by reading them
+> out again. Responses carry `context_source: "live_datahub"`.
+>
+> **Fixture mode** is the default fallback and runs against committed fixtures
+> and a local SQLite warehouse, with no DataHub required. Every response is
+> labelled: `context_source: "fixture"`, a persistent banner in the dashboard,
+> and an approved writeback returns `skipped_fixture_mode` rather than reporting
+> a success that never happened.
+>
+> Live mode never silently degrades — if DataHub is unreachable it reports the
+> failure instead of quietly serving fixtures. See
+> [Honesty guarantees](#honesty-guarantees) and [Running against a real DataHub](#running-against-a-real-datahub).
 
 ---
 
@@ -70,16 +79,16 @@ exists in one layer is a gate that a refactor can remove.
                             │                  │
             ┌───────────────▼──────┐   ┌───────▼───────────────┐
             │  Fixture adapter     │   │  Fixture adapter      │
-            │  (this build)        │   │  → skipped_fixture    │
+            │  (default)           │   │  → skipped_fixture    │
             ├──────────────────────┤   ├───────────────────────┤
             │  DataHub MCP adapter │   │  DataHub SDK adapter  │
-            │  (next environment)  │   │  (next environment)   │
+            │  (live mode)         │   │  (live mode)          │
             └──────────────────────┘   └───────────────────────┘
 ```
 
 The two ports are `typing.Protocol` definitions. The workflow depends on those
-interfaces and never on a concrete adapter, which is what makes the DataHub
-phase an addition rather than a rewrite: the live adapters implement the same
+interfaces and never on a concrete adapter, which is what made the DataHub phase
+an addition rather than a rewrite: the live adapters implement the same
 protocols and get injected at the composition root in `apps/api/lineagemedic_api/main.py`.
 
 ### The seven agents
@@ -142,9 +151,16 @@ accident and impossible to produce quietly.
 - **No inferred connections.** The dashboard reports DataHub connectivity from
   the backend's `datahub_connected` field. It never concludes a connection
   exists because data happens to be present.
-- **No silent degradation.** Setting `LINEAGEMEDIC_MODE=live` without the live
-  adapters returns HTTP 501, rather than falling back to fixtures while
-  claiming to be live.
+- **No silent degradation.** In live mode an unreachable DataHub is reported as
+  a failure. The API never falls back to fixtures while claiming to be live.
+- **No invented assets.** The live adapter checks DataHub's `exists` flag and
+  raises for an unknown URN, so a caller can tell "the catalog has no such
+  asset" from "the catalog was unreachable". It never fills a gap with fixture
+  data.
+- **No destroyed metadata.** A writeback merges into the tags already on an
+  entity. If the current tags cannot be read, the adapter raises rather than
+  writing, because DataHub's `globalTags` is a whole-aspect replace and a failed
+  read would otherwise silently delete every existing tag.
 - **No hand-written examples.** `examples/*.json` are captured from real
   workflow runs by `scripts/export_examples.py`, and CI regenerates and diffs
   them, so they cannot describe behaviour the code lacks.
@@ -179,12 +195,59 @@ tests/                     Backend test suite
 After changing any API response model, run `check_api_types.ps1` and commit the
 regenerated `scripts/openapi.json` and `apps/web/src/api/schema.ts`.
 
+## Running against a real DataHub
+
+Live mode has been exercised end to end against DataHub OSS v1.6.0.
+
+```powershell
+# 1. Start DataHub OSS. The override supplies the token-service signing key
+#    that `datahub docker quickstart` would normally inject; see the file's
+#    header for why it is needed and why the key is safe to commit.
+docker compose -p datahub `
+  -f $HOME\.datahub\quickstart\docker-compose.yml `
+  -f docker\datahub-quickstart.override.yml up -d
+
+# 2. Ingest the lineage. Needs the DataHub SDK, which pins a dependency tree
+#    of its own and so lives in a separate Python 3.11 environment.
+.venv-datahub\Scripts\python.exe scripts\ingest_lineage.py
+
+# 3. Run the API against it.
+$env:LINEAGEMEDIC_MODE = "live"
+$env:DATAHUB_GMS_URL   = "http://localhost:8080"
+.\scripts\start.ps1
+```
+
+The ingested graph is two deliberately disconnected branches — a patient chain
+from `raw_patients` through to the served predictions, and an independent
+billing branch. Containment is a real property of the graph, not an assertion in
+the UI: a patient incident must leave billing untouched, and the integration
+suite fails if the two branches ever become reachable from each other.
+
+The integration tests skip themselves when no DataHub is reachable, so the
+default suite stays runnable with nothing installed:
+
+```powershell
+$env:LINEAGEMEDIC_MODE = "live"; $env:DATAHUB_GMS_URL = "http://localhost:8080"
+.venv\Scripts\python.exe -m pytest tests\test_datahub_integration.py
+```
+
+They cover the parts that only a live instance can prove: that lineage traverses
+the full chain, that the blast radius reaches an ML model and a production
+endpoint by kind (severity is derived from those counts), that an unapproved
+writeback mutates nothing, and that an approved one is verified by reading the
+metadata back out of DataHub.
+
+DataHub v1.6.0 constraints that shaped the ingestion — chiefly that `mlModel`
+and `mlModelDeployment` cannot take part in a lineage traversal at all — are
+documented with their evidence in `_ml_bridge_mcps` in
+[scripts/ingest_lineage.py](scripts/ingest_lineage.py).
+
 ## Status
 
-This is the pre-DataHub build: the complete application, running against
-fixtures, with the adapter seams in place. Connecting the live DataHub MCP
-server and SDK writeback is the next environment's work, and the files it
-touches are listed in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
+The application is complete and runs in both modes. Live DataHub reads,
+lineage traversal, and approval-gated writeback are implemented and verified
+against a running instance; fixture mode remains the labelled default so the
+project is runnable with no infrastructure.
 
 ## License
 

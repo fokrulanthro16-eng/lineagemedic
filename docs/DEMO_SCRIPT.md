@@ -28,12 +28,23 @@ Then open <http://localhost:5173>.
 > using a column that started carrying impossible values three days ago, and
 > nobody knows yet."
 
-Point at the banner across the top of the dashboard:
+Point at the provenance indicator across the top of the dashboard. What it says
+depends on which mode you started in, and either is a good opening beat.
 
-> "Note this first: **Demo Fixture Mode — DataHub integration not connected.**
-> This build runs against committed fixtures. The tool says so on every screen,
-> in every API response, and in the writeback receipt. I'd rather show you a
-> tool that admits what it doesn't have than one that fakes a connection."
+**Running live** (`LINEAGEMEDIC_MODE=live`, DataHub up — see the README):
+
+> "Every asset on this screen came out of a real DataHub instance over its
+> GraphQL API. Each response is stamped `live_datahub`, and the call trace at
+> the bottom lists every query that produced it. Nothing here is illustrative."
+
+**Running on fixtures** (the default, no infrastructure required):
+
+> "Note this first: **Demo Fixture Mode.** This run uses committed fixtures
+> rather than a live catalog, and the tool says so on every screen, in every API
+> response, and in the writeback receipt. I'd rather show you a tool that admits
+> what it doesn't have than one that fakes a connection. The live path is
+> implemented — flip one environment variable and these same screens are served
+> from a real DataHub."
 
 ## 0:25 — Diagnose the critical incident
 
@@ -82,8 +93,9 @@ Now point at the cleared assets.
 > "The defect entered at `raw_patients`, in the age and admission_date columns.
 > Confidence is 80%, and the tool explains where that number comes from rather
 > than asserting it: lineage structure, two independent failed checks on the
-> suspected asset, no gaps in the resolved graph — and it deducts confidence
-> because context came from fixtures rather than a live DataHub."
+> suspected asset, no gaps in the resolved graph. On a fixture run it also
+> deducts confidence for exactly that reason — the evidence came from fixtures
+> rather than a live catalog, and that is held against it."
 
 Show the remediation plan.
 
@@ -108,11 +120,21 @@ This is also shown by `scripts/demo.ps1`, which attempts exactly this:
 
 Now approve, then run the writeback.
 
+On a **fixture** run:
+
 > "Approved — and here's the receipt. It says **`skipped_fixture_mode`**: *no
 > writeback performed, fixture mode*. There's no DataHub attached, so nothing
 > was written, and the tool tells you that instead of showing a green
-> checkmark. When the live adapter is connected, this same receipt reports what
-> was actually emitted."
+> checkmark."
+
+On a **live** run:
+
+> "Approved — and the receipt lists the tags and description actually emitted.
+> The tool then read them back out of DataHub to confirm they landed; the
+> receipt reports the verified state, not the intended one. Open the entity in
+> DataHub and the incident tag is on it. Note the pre-existing tags are still
+> there — a writeback merges rather than replaces, and if it can't first read
+> the current tags it refuses to write at all."
 
 ## 2:35 — The healthy control
 
