@@ -86,7 +86,10 @@ _ENTITY_PATH = {
 #: (nor is ``MLMODEL_DEPLOYMENT`` a member of the ``EntityType`` enum), and
 #: naming it makes the whole query fail validation with "Unknown type".
 #: Deployments are represented in the live catalog by the ``dataJob`` that
-#: serves them; see ``scripts/ingest_lineage.py``.
+#: serves them; see ``scripts/ingest_lineage.py``. ``subTypes`` is therefore
+#: selected on both ``Dataset`` and ``DataJob``: it is the only field that
+#: distinguishes those bridge entities from ordinary tables and jobs, and
+#: :meth:`_kind_for` relies on it to count models and endpoints correctly.
 #:
 #: Every per-fragment selection is aliased. Without aliases, GraphQL compares
 #: identically-named fields across inline fragments and rejects the query when
@@ -120,7 +123,9 @@ _ENTITY_FIELDS = """
                                         type } }
     }
     ... on DataJob {
+      jobExists: exists
       jobProperties: properties { name description }
+      jobSubTypes: subTypes { typeNames }
       jobTags: tags { tags { tag { urn name } } }
       jobOwnership: ownership { owners { owner { ... on CorpGroup { urn name }
                                                  ... on CorpUser  { urn username } }
@@ -495,14 +500,27 @@ class DataHubMetadataAdapter:
 
     @staticmethod
     def _kind_for(entity_type: str, subtypes: list[str]) -> AssetKind:
-        """Classify an entity, preferring the DataHub subtype when present."""
+        """Classify an entity, preferring the DataHub subtype when present.
+
+        The subtype is consulted before the entity type because it is the only
+        thing that distinguishes the datajob/dataset pairs bridging the ML half
+        of the chain (see ``_ml_bridge_mcps`` in ``scripts/ingest_lineage.py``).
+        Those entities are a ``DATA_JOB`` and a ``DATASET`` to DataHub, but an
+        ML model and a production endpoint to this domain; classifying them on
+        entity type alone reports zero models and zero endpoints in the blast
+        radius, which downgrades a critical incident to a warning.
+        """
+        lowered = {s.lower() for s in subtypes}
+        if "ml model" in lowered:
+            return AssetKind.ML_MODEL
+        if "endpoint" in lowered:
+            return AssetKind.ENDPOINT
+        if "feature table" in lowered:
+            return AssetKind.FEATURE_TABLE
         if entity_type in ("MLMODEL",):
             return AssetKind.ML_MODEL
         if entity_type in ("MLMODEL_DEPLOYMENT", "MLMODELDEPLOYMENT"):
             return AssetKind.ENDPOINT
-        lowered = {s.lower() for s in subtypes}
-        if "feature table" in lowered:
-            return AssetKind.FEATURE_TABLE
         return AssetKind.DATASET
 
     @staticmethod

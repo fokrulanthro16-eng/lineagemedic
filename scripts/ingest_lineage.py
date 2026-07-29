@@ -96,12 +96,12 @@ _OWNERSHIP_TYPE = {
 #: DataHub subtypes, so the UI renders each node as what it actually is rather
 #: than as an undifferentiated "Dataset".
 #:
-#: :data:`AssetKind.ENDPOINT` is deliberately absent. DataHub's entity registry
-#: does not define a ``subTypes`` aspect for ``mlModelDeployment`` and rejects
-#: the emit with HTTP 422 ("Unknown aspect subTypes for entity
-#: mlModelDeployment"). A deployment is already unambiguous in the UI by virtue
-#: of its entity type, so there is nothing to disambiguate and no reason to
-#: force the aspect through.
+#: :data:`AssetKind.ENDPOINT` is absent because it cannot be emitted here:
+#: DataHub's entity registry defines no ``subTypes`` aspect for
+#: ``mlModelDeployment`` and rejects the emit with HTTP 422 ("Unknown aspect
+#: subTypes for entity mlModelDeployment"). The endpoint's subtype is instead
+#: carried by its bridge datajob and output dataset, which do accept the aspect;
+#: see :func:`_ml_bridge_mcps`.
 _SUBTYPES = {
     AssetKind.DATASET: ["Table"],
     AssetKind.FEATURE_TABLE: ["Feature Table"],
@@ -440,6 +440,33 @@ def _ml_bridge_mcps(graph: object) -> list[MetadataChangeProposalWrapper]:
                     )
                 ]
             ),
+        ),
+        # Subtypes are what let a reader tell these four apart from ordinary
+        # tables. Without them DataHub reports ``subTypes: null`` and every
+        # bridge entity classifies as a plain dataset, which silently empties
+        # the ML-model and endpoint counts that severity is derived from - a
+        # critical incident then reads as a warning. The strings match the
+        # subtypes emitted for the mlModel and mlModelDeployment entities, so
+        # the bridge and the catalog agree on what each thing is.
+        MetadataChangeProposalWrapper(
+            entityType="dataJob",
+            entityUrn=train_urn,
+            aspect=SubTypesClass(typeNames=["ML Model"]),
+        ),
+        MetadataChangeProposalWrapper(
+            entityType="dataset",
+            entityUrn=URN_MODEL_PREDICTIONS,
+            aspect=SubTypesClass(typeNames=["ML Model"]),
+        ),
+        MetadataChangeProposalWrapper(
+            entityType="dataJob",
+            entityUrn=serve_urn,
+            aspect=SubTypesClass(typeNames=["Endpoint"]),
+        ),
+        MetadataChangeProposalWrapper(
+            entityType="dataset",
+            entityUrn=URN_ENDPOINT_PREDICTIONS,
+            aspect=SubTypesClass(typeNames=["Endpoint"]),
         ),
     ]
 

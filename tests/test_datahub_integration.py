@@ -195,14 +195,44 @@ def test_billing_branch_is_not_connected_to_the_patient_branch(
 def test_entity_kinds_are_classified_from_datahub(
     adapter: DataHubMetadataAdapter,
 ) -> None:
-    """Models must not be flattened into plain datasets.
+    """Models and endpoints must not be flattened into plain datasets.
 
-    The endpoint is not checked here because DataHub v1.6.0 has no
-    ``MLModelDeployment`` GraphQL type to read it back through; the catalog
-    represents it as ``endpoint_predictions`` plus a serving job.
+    The bridge entities are the ones that matter here. To DataHub they are an
+    ordinary ``DATASET`` and ``DATA_JOB``; only their emitted subtype says one
+    is a model's output and the other an endpoint's. Classifying them on entity
+    type alone reported zero models and zero endpoints in the blast radius,
+    which silently downgraded the critical scenario to a warning - a wrong
+    answer with no error raised. See ``test_critical_blast_radius_is_severe``.
     """
     assert adapter.get_asset(URN_READMISSION_MODEL).kind is AssetKind.ML_MODEL
     assert adapter.get_asset(URN_RAW_PATIENTS).kind is AssetKind.DATASET
+    assert adapter.get_asset(URN_MODEL_PREDICTIONS).kind is AssetKind.ML_MODEL
+    assert adapter.get_asset(URN_ENDPOINT_PREDICTIONS).kind is AssetKind.ENDPOINT
+
+
+def test_critical_blast_radius_reaches_a_model_and_an_endpoint(
+    adapter: DataHubMetadataAdapter,
+) -> None:
+    """Severity is derived, so the kinds in the blast radius decide it.
+
+    Reaching the right assets is not enough: the Impact Agent counts affected
+    ML models and production endpoints, and a chain that traverses correctly
+    but classifies every node as a dataset yields zero of each. That is what
+    made the critical scenario report ``warning`` against a live instance while
+    every traversal assertion still passed.
+    """
+    graph = adapter.get_lineage(URN_RAW_PATIENTS)
+    reachable = set(graph.downstream_closure(URN_RAW_PATIENTS))
+    kinds = {a.kind for a in graph.assets if a.urn in reachable}
+
+    assert AssetKind.ML_MODEL in kinds, (
+        "no ML model in the blast radius; a critical incident would be "
+        "reported as a warning"
+    )
+    assert AssetKind.ENDPOINT in kinds, (
+        "no production endpoint in the blast radius; a critical incident "
+        "would be reported as a warning"
+    )
 
 
 def test_calls_are_recorded_with_live_provenance(
