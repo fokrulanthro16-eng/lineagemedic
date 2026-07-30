@@ -82,6 +82,13 @@ The 96 includes 15 DataHub integration tests, which **skip themselves** when no
 DataHub is reachable. With Docker down you will see `81 passed, 15 skipped`;
 that is correct behaviour, not a failure.
 
+Three further tests skip themselves when the DataHub *SDK* is absent, which is
+independent of whether Docker is running: `acryl-datahub` is an optional extra,
+so a fixture-mode install does not have it. On a clean clone that installed only
+the base dependencies — the same set CI installs — the count is
+`78 passed, 18 skipped`. All three numbers describe a healthy run; which one you
+see depends on whether the SDK is installed and whether DataHub is up.
+
 ### Verify the API contract cannot drift
 
 ```powershell

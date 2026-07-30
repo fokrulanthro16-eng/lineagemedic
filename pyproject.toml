@@ -47,3 +47,23 @@ exclude = ["\\.venv", "\\.venv-datahub", "node_modules", "apps/web"]
 # are inferred. Requires tests/__init__.py so the modules resolve as "tests.*".
 module = "tests.*"
 disallow_untyped_defs = false
+
+[[tool.mypy.overrides]]
+# The DataHub SDK is an *optional* extra (``lineagemedic[datahub]``): fixture
+# mode must not have to pull its dependency tree, and CI deliberately installs
+# no DataHub at all. So whether these imports resolve depends on which extras
+# happen to be present, and mypy's verdict must not.
+#
+# Without this, a developer who has installed the extra sees a clean run while
+# CI -- which has not -- fails with four ``import-not-found`` errors in
+# ``adapters/datahub_sdk.py``. That is exactly how a green local gate and a red
+# CI gate stopped meaning the same thing.
+#
+# Scoped to ``datahub.*`` rather than set globally: every other missing import
+# in this repository is a real error and must stay one. The SDK ships
+# ``py.typed`` but no usable stubs for these modules, and the call sites are
+# already funnelled through ``_sdk()``, which returns ``Any`` -- so nothing here
+# was being type-checked in the first place. Silencing it changes what mypy
+# reports, not what it verifies.
+module = "datahub.*"
+ignore_missing_imports = true
