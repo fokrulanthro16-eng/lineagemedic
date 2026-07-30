@@ -31,6 +31,13 @@ filmed.
 Record at 1920x1080 or wider. The DataHub lineage graph needs roughly 2200px of
 viewport to show the full downstream fan-out without scrolling.
 
+**Pacing note.** In live mode a diagnosis takes **5-10 seconds** end to end: the
+Context agent makes real MCP calls against DataHub, and that latency is genuine
+rather than a stall. Measured on 2026-07-30: 5.7s, 5.8s and 6.3s for the three
+scenarios. Plan the narration in shot 2 to cover it — that pause is a good
+moment to name the seven agents while the workflow panel fills in. Do not cut
+it out; it is what distinguishes this from a mock.
+
 ## Shot list
 
 | # | Duration | Screen | What to show | What to say |
